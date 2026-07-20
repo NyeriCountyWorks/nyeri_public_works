@@ -8,7 +8,120 @@ import plotly.express as px
 import streamlit as st
 
 
-# --- TIME-BASED GREETING HELPER ---
+# --- 1. DATABASE & USER AUTHENTICATION HELPERS ---
+def init_users_db():
+    """Ensure the users table exists and contains default credentials."""
+    try:
+        conn = sqlite3.connect("nyeri_public_works.db")
+        cursor = conn.cursor()
+
+        # Create users table if not exists
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS users (
+                user_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username TEXT UNIQUE NOT NULL,
+                password TEXT NOT NULL,
+                full_name TEXT NOT NULL,
+                role TEXT DEFAULT 'Viewer'
+            )
+        """
+        )
+
+        # Ensure missing columns exist if modifying an old schema
+        cursor.execute("PRAGMA table_info(users)")
+        cols = [col[1] for col in cursor.fetchall()]
+
+        if "password" not in cols:
+            cursor.execute(
+                "ALTER TABLE users ADD COLUMN password TEXT DEFAULT 'admin123'"
+            )
+        if "role" not in cols:
+            cursor.execute(
+                "ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'Viewer'"
+            )
+
+        # Seed initial admin & viewer accounts if empty
+        cursor.execute("SELECT COUNT(*) FROM users")
+        if cursor.fetchone()[0] == 0:
+            cursor.execute(
+                "INSERT INTO users (username, password, full_name, role) VALUES ('admin', 'admin123', 'Administrator', 'Admin')"
+            )
+            cursor.execute(
+                "INSERT INTO users (username, password, full_name, role) VALUES ('viewer', 'viewer123', 'Executive Viewer', 'Viewer')"
+            )
+
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        st.error(f"User DB Initialization error: {e}")
+
+
+def verify_login(username, password):
+    """Verify user credentials against SQLite or static fallback."""
+    try:
+        conn = sqlite3.connect("nyeri_public_works.db")
+        cursor = conn.cursor()
+
+        # Flexible column check
+        cursor.execute("PRAGMA table_info(users)")
+        cols = [col[1] for col in cursor.fetchall()]
+
+        name_col = "full_name" if "full_name" in cols else "username"
+        role_col = (
+            "role" if "role" in cols else ("role_title" if "role_title" in cols else "'Viewer'")
+        )
+
+        cursor.execute(
+            f"SELECT username, password, {name_col}, {role_col} FROM users WHERE LOWER(username) = LOWER(?)",
+            (username.strip(),),
+        )
+        row = cursor.fetchone()
+        conn.close()
+
+        if row and str(row[1]) == str(password):
+            return {
+                "username": row[0],
+                "full_name": row[2] if row[2] else row[0],
+                "role": row[3] if row[3] else "Viewer",
+            }
+    except Exception:
+        pass
+
+    # Fallback default users
+    fallback_users = {
+        "admin": {"password": "admin123", "role": "Admin", "full_name": "Administrator"},
+        "viewer": {"password": "viewer123", "role": "Viewer", "full_name": "Executive Viewer"},
+    }
+    if username in fallback_users and fallback_users[username]["password"] == password:
+        return {
+            "username": username,
+            "full_name": fallback_users[username]["full_name"],
+            "role": fallback_users[username]["role"],
+        }
+
+    return None
+
+
+def register_user(username, password, full_name, role="Viewer"):
+    """Register a new user in the SQLite database."""
+    try:
+        conn = sqlite3.connect("nyeri_public_works.db")
+        cursor = conn.cursor()
+        cursor.execute(
+            "INSERT INTO users (username, password, full_name, role) VALUES (?, ?, ?, ?)",
+            (username.strip(), password, full_name.strip(), role),
+        )
+        conn.commit()
+        conn.close()
+        return True, "🎉 Account created successfully! You can now log in."
+    except sqlite3.IntegrityError:
+        return False, "⚠️ Username already exists. Please pick a different username."
+    except Exception as e:
+        return False, f"Registration error: {e}"
+
+
+# --- 2. TIME-BASED GREETING HELPER ---
 def get_time_greeting():
     hour = datetime.datetime.now().hour
     if hour < 12:
@@ -19,7 +132,7 @@ def get_time_greeting():
         return "Good evening"
 
 
-# --- NYERI COUNTY SEAL VECTOR FALLBACK ---
+# --- 3. NYERI COUNTY SEAL VECTOR FALLBACK ---
 NYERI_SEAL_FALLBACK_SVG = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 500" width="130" height="130" style="display: block; margin: 0 auto; filter: drop-shadow(0px 6px 12px rgba(0,0,0,0.35));">
   <defs>
     <path id="textCirclePath" d="M 50,250 A 200,200 0 1,1 450,250 A 200,200 0 1,1 50,250" fill="none" />
@@ -150,7 +263,7 @@ def inject_custom_styles():
     )
 
 
-# 1. PAGE CONFIGURATION
+# --- 4. APP INITIALIZATION ---
 st.set_page_config(
     page_title="Ministry MIS - Executive Dashboard",
     layout="wide",
@@ -158,17 +271,13 @@ st.set_page_config(
 )
 
 inject_custom_styles()
+init_users_db()
 
-# 2. SESSION STATE MANAGEMENT
+# Session state initialization
 if "authenticated" not in st.session_state:
     st.session_state["authenticated"] = False
 
-USERS = {
-    "admin": {"password": "admin123", "role": "Admin", "name": "Administrator"},
-    "viewer": {"password": "viewer123", "role": "Viewer", "name": "Executive Viewer"},
-}
-
-# 3. LOGIN SCREEN
+# --- 5. AUTHENTICATION (LOGIN & SIGN UP SCREEN) ---
 if not st.session_state["authenticated"]:
     col_l, col_c, col_r = st.columns([1, 1, 1])
     with col_c:
@@ -183,36 +292,82 @@ if not st.session_state["authenticated"]:
         unsafe_allow_html=True,
     )
 
-    # Goodbye message if user just logged out
+    # Display Goodbye message on logout
     if st.session_state.get("show_goodbye", False):
         last_user = st.session_state.get("last_username", "User")
-        st.success(f"👋 Goodbye, **{last_user}**! You have been logged out securely. Have a great day!")
+        st.success(
+            f"👋 Goodbye, **{last_user}**! You have been logged out securely. Have a great day!"
+        )
         st.session_state["show_goodbye"] = False
 
-    _, login_col, _ = st.columns([1, 1.5, 1])
-    with login_col:
-        with st.form("login_form"):
-            user_input = st.text_input("Username")
-            pass_input = st.text_input("Password", type="password")
-            submitted = st.form_submit_button("Sign In Securely")
+    # Login and Sign Up Tab UI
+    _, auth_col, _ = st.columns([1, 1.8, 1])
+    with auth_col:
+        tab_login, tab_signup = st.tabs(["🔒 Sign In", "📝 Create Account"])
 
-            if submitted:
-                if (
-                    user_input in USERS
-                    and USERS[user_input]["password"] == pass_input
-                ):
-                    st.session_state["authenticated"] = True
-                    st.session_state["username"] = user_input
-                    st.session_state["role"] = USERS[user_input]["role"]
-                    st.session_state["full_name"] = USERS[user_input]["name"]
-                    st.session_state["just_logged_in"] = True  # Trigger welcome toast
-                    st.rerun()
-                else:
-                    st.error("Invalid username or password")
+        # LOGIN TAB
+        with tab_login:
+            with st.form("login_form"):
+                user_input = st.text_input("Username")
+                pass_input = st.text_input("Password", type="password")
+                submitted = st.form_submit_button(
+                    "Sign In Securely", use_container_width=True
+                )
+
+                if submitted:
+                    user_data = verify_login(user_input, pass_input)
+                    if user_data:
+                        st.session_state["authenticated"] = True
+                        st.session_state["username"] = user_data["username"]
+                        st.session_state["role"] = user_data["role"]
+                        st.session_state["full_name"] = user_data["full_name"]
+                        st.session_state["just_logged_in"] = True
+                        st.rerun()
+                    else:
+                        st.error("Invalid username or password.")
+
+        # SIGN UP TAB
+        with tab_signup:
+            with st.form("signup_form"):
+                new_fullname = st.text_input("Full Name (e.g., Jane Doe)")
+                new_username = st.text_input("Choose Username")
+                new_password = st.text_input("Choose Password", type="password")
+                confirm_password = st.text_input(
+                    "Confirm Password", type="password"
+                )
+                new_role = st.selectbox(
+                    "Access Role",
+                    ["Viewer", "Project Officer", "Department Manager"],
+                )
+
+                signup_submitted = st.form_submit_button(
+                    "Register New Account", use_container_width=True
+                )
+
+                if signup_submitted:
+                    if (
+                        not new_fullname.strip()
+                        or not new_username.strip()
+                        or not new_password
+                    ):
+                        st.warning("Please fill in all required fields.")
+                    elif new_password != confirm_password:
+                        st.error("Passwords do not match. Please re-enter.")
+                    elif len(new_password) < 4:
+                        st.error("Password must be at least 4 characters long.")
+                    else:
+                        success, msg = register_user(
+                            new_username, new_password, new_fullname, new_role
+                        )
+                        if success:
+                            st.success(msg)
+                            st.info("👈 Switch to the **Sign In** tab to log in.")
+                        else:
+                            st.error(msg)
 
     st.stop()
 
-# --- SIDEBAR BRANDING & USER PROFILE ---
+# --- 6. SIDEBAR BRANDING & USER PROFILE ---
 seal_element = get_nyeri_seal_element()
 sidebar_header_html = textwrap.dedent(f"""
 <div style="text-align: center; margin-bottom: 15px;">
@@ -235,15 +390,20 @@ if st.sidebar.button("Logout"):
 
 st.sidebar.markdown("---")
 
-# 4. WELCOME TOAST NOTIFICATION ON LOGIN
+# --- 7. WELCOME TOAST NOTIFICATION ON LOGIN ---
 current_greeting = get_time_greeting()
-user_display = st.session_state.get("full_name", st.session_state.get("username", "User"))
+user_display = st.session_state.get(
+    "full_name", st.session_state.get("username", "User")
+)
 
 if st.session_state.get("just_logged_in", False):
-    st.toast(f"👋 {current_greeting}, {user_display}! Welcome to Nyeri MIS Portal.", icon="🏛️")
+    st.toast(
+        f"👋 {current_greeting}, {user_display}! Welcome to Nyeri MIS Portal.",
+        icon="🏛️",
+    )
     st.session_state["just_logged_in"] = False
 
-# 5. DASHBOARD MAIN CONTENT
+# --- 8. DASHBOARD MAIN CONTENT ---
 st.title("🏛️ Department of Public Works, Roads & Infrastructure")
 
 # Dynamic Header Banner with Time-based Greeting
@@ -459,6 +619,4 @@ if not df.empty:
     st.dataframe(filtered_df, use_container_width=True)
 
 else:
-    st.warning(
-        "No project data found. Please add projects via the Registry page."
-    )
+    st.warning("No project data found. Please add projects via the Registry page.")
