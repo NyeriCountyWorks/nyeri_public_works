@@ -1,4 +1,5 @@
 import base64
+import datetime
 import os
 import sqlite3
 import textwrap
@@ -6,7 +7,19 @@ import pandas as pd
 import plotly.express as px
 import streamlit as st
 
-# --- Nyeri County Seal Vector Fallback ---
+
+# --- TIME-BASED GREETING HELPER ---
+def get_time_greeting():
+    hour = datetime.datetime.now().hour
+    if hour < 12:
+        return "Good morning"
+    elif hour < 17:
+        return "Good afternoon"
+    else:
+        return "Good evening"
+
+
+# --- NYERI COUNTY SEAL VECTOR FALLBACK ---
 NYERI_SEAL_FALLBACK_SVG = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 500" width="130" height="130" style="display: block; margin: 0 auto; filter: drop-shadow(0px 6px 12px rgba(0,0,0,0.35));">
   <defs>
     <path id="textCirclePath" d="M 50,250 A 200,200 0 1,1 450,250 A 200,200 0 1,1 50,250" fill="none" />
@@ -146,13 +159,13 @@ st.set_page_config(
 
 inject_custom_styles()
 
-# 2. SESSION STATE
+# 2. SESSION STATE MANAGEMENT
 if "authenticated" not in st.session_state:
     st.session_state["authenticated"] = False
 
 USERS = {
-    "admin": {"password": "admin123", "role": "Admin"},
-    "viewer": {"password": "viewer123", "role": "Viewer"},
+    "admin": {"password": "admin123", "role": "Admin", "name": "Administrator"},
+    "viewer": {"password": "viewer123", "role": "Viewer", "name": "Executive Viewer"},
 }
 
 # 3. LOGIN SCREEN
@@ -170,6 +183,12 @@ if not st.session_state["authenticated"]:
         unsafe_allow_html=True,
     )
 
+    # Goodbye message if user just logged out
+    if st.session_state.get("show_goodbye", False):
+        last_user = st.session_state.get("last_username", "User")
+        st.success(f"👋 Goodbye, **{last_user}**! You have been logged out securely. Have a great day!")
+        st.session_state["show_goodbye"] = False
+
     _, login_col, _ = st.columns([1, 1.5, 1])
     with login_col:
         with st.form("login_form"):
@@ -185,6 +204,8 @@ if not st.session_state["authenticated"]:
                     st.session_state["authenticated"] = True
                     st.session_state["username"] = user_input
                     st.session_state["role"] = USERS[user_input]["role"]
+                    st.session_state["full_name"] = USERS[user_input]["name"]
+                    st.session_state["just_logged_in"] = True  # Trigger welcome toast
                     st.rerun()
                 else:
                     st.error("Invalid username or password")
@@ -208,13 +229,33 @@ st.sidebar.markdown(f"**🛡️ Role:** {st.session_state.get('role', 'Viewer')}
 
 if st.sidebar.button("Logout"):
     st.session_state["authenticated"] = False
+    st.session_state["show_goodbye"] = True
+    st.session_state["last_username"] = st.session_state.get("username", "User")
     st.rerun()
 
 st.sidebar.markdown("---")
 
-# 4. DASHBOARD MAIN CONTENT
+# 4. WELCOME TOAST NOTIFICATION ON LOGIN
+current_greeting = get_time_greeting()
+user_display = st.session_state.get("full_name", st.session_state.get("username", "User"))
+
+if st.session_state.get("just_logged_in", False):
+    st.toast(f"👋 {current_greeting}, {user_display}! Welcome to Nyeri MIS Portal.", icon="🏛️")
+    st.session_state["just_logged_in"] = False
+
+# 5. DASHBOARD MAIN CONTENT
 st.title("🏛️ Department of Public Works, Roads & Infrastructure")
-st.subheader("County Government of Nyeri — Executive MIS Dashboard")
+
+# Dynamic Header Banner with Time-based Greeting
+st.markdown(
+    f"""
+    <div style="background-color: #f0f7f2; border-left: 5px solid #0A4D20; padding: 12px 20px; border-radius: 6px; margin-bottom: 20px;">
+        <span style="color: #0A4D20; font-weight: 600; font-size: 18px;">☀️ {current_greeting}, {user_display}!</span>
+        <span style="color: #555555; font-size: 14px; margin-left: 10px;">| County Government of Nyeri Executive MIS Dashboard</span>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
 
 
 def fetch_project_data():
@@ -228,13 +269,10 @@ def fetch_project_data():
             conn.close()
             return pd.DataFrame()
 
-        # Exclude system/user management tables
         ignored_tables = ["users", "audit_trail", "sqlite_sequence"]
         candidate_tables = [t for t in tables if t.lower() not in ignored_tables]
 
         target_table = None
-
-        # Auto-detect project or registry tables
         for t in candidate_tables:
             if "project" in t.lower() or "registry" in t.lower():
                 target_table = t
@@ -260,7 +298,6 @@ df = fetch_project_data()
 if not df.empty:
     st.sidebar.header("📊 Filter Projects")
 
-    # Flexible column detection matching registry database schema
     dept_col = next(
         (
             c
