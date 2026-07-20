@@ -3,13 +3,11 @@ import pandas as pd
 import plotly.express as px
 import os
 import base64
+import textwrap
 import streamlit as st
 
 # --- Nyeri County Seal Vector Fallback ---
-# High-definition SVG replicating official seal elements:
-# Kudus, Mount Kenya shield, coffee berries, dairy cow, and blue banner.
-NYERI_SEAL_FALLBACK_SVG = """
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 500" width="140" height="140" style="display: block; margin: 0 auto; filter: drop-shadow(0px 8px 16px rgba(0,0,0,0.35));">
+NYERI_SEAL_FALLBACK_SVG = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 500" width="130" height="130" style="display: block; margin: 0 auto; filter: drop-shadow(0px 6px 12px rgba(0,0,0,0.35));">
   <defs>
     <path id="textCirclePath" d="M 50,250 A 200,200 0 1,1 450,250 A 200,200 0 1,1 50,250" fill="none" />
     <path id="bottomTextCirclePath" d="M 410,250 A 160,160 0 0,1 90,250" fill="none" />
@@ -78,45 +76,29 @@ NYERI_SEAL_FALLBACK_SVG = """
     <polygon points="290,430 293,440 303,440 295,446 298,456 290,450 282,456 285,446 277,440 287,440" />
     <polygon points="330,415 333,425 343,425 335,431 338,441 330,435 322,441 325,431 317,425 327,425" />
   </g>
-</svg>
-"""
+</svg>"""
 
 
 def get_nyeri_seal_element():
-    """
-    Renders seal.png if committed to the root directory,
-    otherwise renders the fallback vector SVG of the seal.
-    """
     if os.path.exists("seal.png"):
         try:
             with open("seal.png", "rb") as image_file:
                 encoded_string = base64.b64encode(image_file.read()).decode()
-            return f"""
-            <img src="data:image/png;base64,{encoded_string}" 
-                 alt="Nyeri County Government Seal" 
-                 style="display: block; margin: 0 auto; width: 140px; height: 140px; border-radius: 50%; filter: drop-shadow(0px 8px 16px rgba(0,0,0,0.45)); border: 3px solid #D4AF37;">
-            """
+            return f'<img src="data:image/png;base64,{encoded_string}" alt="Nyeri County Seal" style="display: block; margin: 0 auto; width: 130px; height: 130px; border-radius: 50%; border: 3px solid #D4AF37;">'
         except Exception:
             pass
     return NYERI_SEAL_FALLBACK_SVG
 
 
 def inject_custom_styles():
-    """
-    Injects custom CSS to style the sidebar background in Nyeri Forest Green,
-    sets gold headers/borders, and formats form elements, lists, and tables.
-    """
     st.markdown(
         """
     <style>
-        /* Sidebar background gradient (Nyeri Deep Green) */
         [data-testid="stSidebar"] {
             background-color: #0A4D20 !important;
             background-image: linear-gradient(180deg, #0A4D20 0%, #041f0d 100%) !important;
             color: #FFFFFF !important;
         }
-        
-        /* Set standard sidebar text to high-contrast white */
         [data-testid="stSidebar"] p, 
         [data-testid="stSidebar"] span, 
         [data-testid="stSidebar"] h1, 
@@ -129,51 +111,22 @@ def inject_custom_styles():
             color: #FFFFFF !important;
             font-family: 'Poppins', sans-serif;
         }
-        
-        /* Accent elements in sidebar to gold */
         [data-testid="stSidebar"] strong {
             color: #D4AF37 !important;
         }
-        
-        /* Highlight active menu item (Registry page) */
-        [data-testid="stSidebarNav"] ul li a[href*="Registry"] span,
-        [data-testid="stSidebarNav"] ul li a[href*="registry"] span {
-            color: #0A4D20 !important;
-            font-weight: 700 !important;
-        }
-        [data-testid="stSidebarNav"] ul li a[href*="Registry"],
-        [data-testid="stSidebarNav"] ul li a[href*="registry"] {
-            background-color: #FFFFFF !important;
-            border-left: 5px solid #D4AF37 !important;
-            border-radius: 8px !important;
-            box-shadow: 0px 4px 10px rgba(0,0,0,0.2) !important;
-        }
-        
-        /* Custom styling for inputs and selects inside sidebar */
-        [data-testid="stSidebar"] div[data-baseweb="select"] {
-            background-color: #041f0d !important;
-            border: 1px solid #D4AF37 !important;
-            border-radius: 8px !important;
-        }
-        
-        /* Styled Logout Button in Sidebar */
         [data-testid="stSidebar"] button {
             background-color: #FFFFFF !important;
             color: #0A4D20 !important;
             border: 2px solid #D4AF37 !important;
             border-radius: 20px !important;
             font-weight: bold !important;
-            transition: all 0.3s ease !important;
             width: 100% !important;
         }
         [data-testid="stSidebar"] button:hover {
             background-color: #D4AF37 !important;
             color: #041f0d !important;
             border-color: #FFFFFF !important;
-            box-shadow: 0px 4px 12px rgba(212, 175, 55, 0.4) !important;
         }
-        
-        /* Core metric values green */
         div[data-testid="stMetricValue"] {
             color: #0A4D20 !important;
             font-weight: 700 !important;
@@ -191,10 +144,9 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# Inject Nyeri custom styling
 inject_custom_styles()
 
-# 2. SESSION STATE SETUP
+# 2. SESSION STATE
 if "authenticated" not in st.session_state:
     st.session_state["authenticated"] = False
 
@@ -203,10 +155,10 @@ USERS = {
     "viewer": {"password": "viewer123", "role": "Viewer"},
 }
 
-# 3. LOGIN LOGIC
+# 3. LOGIN SCREEN
 if not st.session_state["authenticated"]:
-    col_logo_l, col_logo_c, col_logo_r = st.columns([1, 1, 1])
-    with col_logo_c:
+    col_l, col_c, col_r = st.columns([1, 1, 1])
+    with col_c:
         st.markdown(get_nyeri_seal_element(), unsafe_allow_html=True)
 
     st.markdown(
@@ -218,8 +170,8 @@ if not st.session_state["authenticated"]:
         unsafe_allow_html=True,
     )
 
-    login_col1, login_col2, login_col3 = st.columns([1, 1.5, 1])
-    with login_col2:
+    _, login_col, _ = st.columns([1, 1.5, 1])
+    with login_col:
         with st.form("login_form"):
             user_input = st.text_input("Username")
             pass_input = st.text_input("Password", type="password")
@@ -239,19 +191,17 @@ if not st.session_state["authenticated"]:
 
     st.stop()
 
-# --- SIDEBAR USER INFO & LOGOUT ---
-seal_html = get_nyeri_seal_element()
-st.sidebar.markdown(
-    f"""
-<div style="text-align: center; margin-bottom: 20px;">
-    {seal_html}
-    <h3 style="margin-top: 15px; font-size: 18px; font-weight: 700; letter-spacing: 1px;">NYERI COUNTY</h3>
-    <span style="color: #D4AF37; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 1.5px;">Public Works MIS</span>
+# --- SIDEBAR BRANDING & USER PROFILE ---
+seal_element = get_nyeri_seal_element()
+sidebar_header_html = textwrap.dedent(f"""
+<div style="text-align: center; margin-bottom: 15px;">
+    {seal_element}
+    <h3 style="margin-top: 10px; font-size: 18px; font-weight: 700; color: #FFFFFF;">NYERI COUNTY</h3>
+    <span style="color: #D4AF37; font-size: 11px; font-weight: 600; text-transform: uppercase;">Public Works MIS</span>
 </div>
-<hr style="border: 0; border-top: 1px solid rgba(255, 255, 255, 0.15); margin-bottom: 20px;" />
-""",
-    unsafe_allow_html=True,
-)
+<hr style="border: 0; border-top: 1px solid rgba(255, 255, 255, 0.2); margin-bottom: 15px;" />
+""")
+st.sidebar.markdown(sidebar_header_html, unsafe_allow_html=True)
 
 st.sidebar.markdown(f"**👤 User:** {st.session_state.get('username', 'User')}")
 st.sidebar.markdown(f"**🛡️ Role:** {st.session_state.get('role', 'Viewer')}")
@@ -262,63 +212,56 @@ if st.sidebar.button("Logout"):
 
 st.sidebar.markdown("---")
 
-# 4. DASHBOARD CONTENT (Authenticated)
+# 4. DASHBOARD MAIN CONTENT
 st.title("🏛️ Department of Public Works, Roads & Infrastructure")
 st.subheader("County Government of Nyeri — Executive MIS Dashboard")
 
 try:
     conn = sqlite3.connect("nyeri_public_works.db")
-
-    # Determine available tables
     cursor = conn.cursor()
     cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
     tables = [row[0] for row in cursor.fetchall()]
 
-    table_name = (
-        "projects" if "projects" in tables else (tables[0] if tables else None)
-    )
-
-    if table_name:
-        df = pd.read_sql_query(f"SELECT * FROM {table_name}", conn)
+    # Strictly query the 'projects' table
+    if "projects" in tables:
+        df = pd.read_sql_query("SELECT * FROM projects", conn)
     else:
         df = pd.DataFrame()
 
     conn.close()
 
     if not df.empty:
-        # Sidebar Filters
         st.sidebar.header("📊 Filter Projects")
 
-        # Case-insensitive column resolution
         dept_col = next(
             (
-                col
-                for col in df.columns
-                if col.lower() in ["department", "dept"]
+                c
+                for c in df.columns
+                if c.lower() in ["department", "dept", "dept_name"]
             ),
             None,
         )
         status_col = next(
             (
-                col
-                for col in df.columns
-                if col.lower() in ["status", "project_status"]
+                c
+                for c in df.columns
+                if c.lower() in ["status", "project_status", "stage"]
             ),
             None,
         )
         budget_col = next(
             (
-                col
-                for col in df.columns
-                if col.lower() in ["budget", "cost", "allocated_budget"]
+                c
+                for c in df.columns
+                if c.lower() in ["budget", "cost", "allocated_budget", "amount"]
             ),
             None,
         )
         name_col = next(
             (
-                col
-                for col in df.columns
-                if col.lower() in ["project_name", "name", "title"]
+                c
+                for c in df.columns
+                if c.lower() in ["project_name", "name", "title"]
             ),
             df.columns[0],
         )
@@ -352,9 +295,9 @@ try:
         kpi1, kpi2, kpi3, kpi4 = st.columns(4)
 
         total_proj = len(filtered_df)
-
         completed_proj = 0
         pending_proj = 0
+
         if status_col:
             completed_proj = len(
                 filtered_df[
@@ -376,7 +319,7 @@ try:
         kpi3.metric("Pending Projects", pending_proj)
         kpi4.metric("Total Budget Allocated", f"KES {total_budget:,.2f}")
 
-        # --- INTERACTIVE PLOTLY CHARTS ---
+        # --- CHARTS ---
         col_left, col_right = st.columns(2)
 
         with col_left:
@@ -403,7 +346,7 @@ try:
                 )
                 st.plotly_chart(fig_dept, use_container_width=True)
             else:
-                st.info("No department data available.")
+                st.info("No department data column found.")
 
         with col_right:
             if status_col:
@@ -416,9 +359,9 @@ try:
                 fig_status.update_layout(margin=dict(t=20, b=20))
                 st.plotly_chart(fig_status, use_container_width=True)
             else:
-                st.info("No status data available.")
+                st.info("No status data column found.")
 
-        # --- BUDGET COMPLIANCE & HIGH-VALUE PROJECTS ---
+        # --- BUDGET OVERSIGHT ---
         st.subheader("⚠️ High-Value Budget Oversight")
         if budget_col:
             temp_df = filtered_df.copy()
@@ -437,13 +380,13 @@ try:
         else:
             st.info("No budget data column found.")
 
-        # --- FULL FILTERED TABLE ---
+        # --- FULL TABLE ---
         st.subheader("Project Details Table")
         st.dataframe(filtered_df, use_container_width=True)
 
     else:
-        st.info(
-            "The database is currently empty or no projects table was found. Please add projects using the Registry page."
+        st.warning(
+            "No project data found in the `projects` table. Please insert project records into `nyeri_public_works.db` or add them via the Registry page."
         )
 
 except Exception as e:
