@@ -1,0 +1,3 @@
+document_id,tracking_number,project_name,sub_county_ward,department_assigned,current_status,rejection_reason,dept_id,contractor_id,estimated_cost,actual_cost,start_date,end_date,created_at,ward_location,notes
+1,NYR-PW-2026-001,"Karatina Market Floodlight Installation","Mathira East",Electrical,Rejected,"Budget allocation insufficient for this quarter",3,1,500000.0,485000.0,2026-07-10,2026-07-22,"2026-07-17 16:22:48",Karatina,
+2,NYR-PW-2026-002,"Othaya Road Patching",Othaya-Central,Roads,Approved,,1,1,200000.0,50000.0,2026-08-01,2026-08-15,,Othaya,"Delayed due to heavy rainfall in Othaya"
