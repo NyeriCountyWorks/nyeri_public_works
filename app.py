@@ -15,7 +15,6 @@ def init_users_db():
         conn = sqlite3.connect("nyeri_public_works.db")
         cursor = conn.cursor()
 
-        # Create users table if not exists
         cursor.execute(
             """
             CREATE TABLE IF NOT EXISTS users (
@@ -28,7 +27,6 @@ def init_users_db():
         """
         )
 
-        # Ensure missing columns exist if modifying an old schema
         cursor.execute("PRAGMA table_info(users)")
         cols = [col[1] for col in cursor.fetchall()]
 
@@ -41,7 +39,6 @@ def init_users_db():
                 "ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'Viewer'"
             )
 
-        # Seed initial admin & viewer accounts if empty
         cursor.execute("SELECT COUNT(*) FROM users")
         if cursor.fetchone()[0] == 0:
             cursor.execute(
@@ -63,13 +60,14 @@ def verify_login(username, password):
         conn = sqlite3.connect("nyeri_public_works.db")
         cursor = conn.cursor()
 
-        # Flexible column check
         cursor.execute("PRAGMA table_info(users)")
         cols = [col[1] for col in cursor.fetchall()]
 
         name_col = "full_name" if "full_name" in cols else "username"
         role_col = (
-            "role" if "role" in cols else ("role_title" if "role_title" in cols else "'Viewer'")
+            "role"
+            if "role" in cols
+            else ("role_title" if "role_title" in cols else "'Viewer'")
         )
 
         cursor.execute(
@@ -88,12 +86,22 @@ def verify_login(username, password):
     except Exception:
         pass
 
-    # Fallback default users
     fallback_users = {
-        "admin": {"password": "admin123", "role": "Admin", "full_name": "Administrator"},
-        "viewer": {"password": "viewer123", "role": "Viewer", "full_name": "Executive Viewer"},
+        "admin": {
+            "password": "admin123",
+            "role": "Admin",
+            "full_name": "Administrator",
+        },
+        "viewer": {
+            "password": "viewer123",
+            "role": "Viewer",
+            "full_name": "Executive Viewer",
+        },
     }
-    if username in fallback_users and fallback_users[username]["password"] == password:
+    if (
+        username in fallback_users
+        and fallback_users[username]["password"] == password
+    ):
         return {
             "username": username,
             "full_name": fallback_users[username]["full_name"],
@@ -116,7 +124,10 @@ def register_user(username, password, full_name, role="Viewer"):
         conn.close()
         return True, "🎉 Account created successfully! You can now log in."
     except sqlite3.IntegrityError:
-        return False, "⚠️ Username already exists. Please pick a different username."
+        return (
+            False,
+            "⚠️ Username already exists. Please pick a different username.",
+        )
     except Exception as e:
         return False, f"Registration error: {e}"
 
@@ -273,7 +284,6 @@ st.set_page_config(
 inject_custom_styles()
 init_users_db()
 
-# Session state initialization
 if "authenticated" not in st.session_state:
     st.session_state["authenticated"] = False
 
@@ -292,7 +302,6 @@ if not st.session_state["authenticated"]:
         unsafe_allow_html=True,
     )
 
-    # Display Goodbye message on logout
     if st.session_state.get("show_goodbye", False):
         last_user = st.session_state.get("last_username", "User")
         st.success(
@@ -300,12 +309,10 @@ if not st.session_state["authenticated"]:
         )
         st.session_state["show_goodbye"] = False
 
-    # Login and Sign Up Tab UI
     _, auth_col, _ = st.columns([1, 1.8, 1])
     with auth_col:
         tab_login, tab_signup = st.tabs(["🔒 Sign In", "📝 Create Account"])
 
-        # LOGIN TAB
         with tab_login:
             with st.form("login_form"):
                 user_input = st.text_input("Username")
@@ -326,7 +333,6 @@ if not st.session_state["authenticated"]:
                     else:
                         st.error("Invalid username or password.")
 
-        # SIGN UP TAB
         with tab_signup:
             with st.form("signup_form"):
                 new_fullname = st.text_input("Full Name (e.g., Jane Doe)")
@@ -557,23 +563,25 @@ if not df.empty:
     kpi3.metric("Pending Projects", pending_proj)
     kpi4.metric("Total Budget Allocated", f"KES {total_budget:,.2f}")
 
-    # --- CHARTS ---
+    # --- MULTI-COLOR CHARTS ---
     col_left, col_right = st.columns(2)
 
     with col_left:
         if dept_col:
             dept_counts = filtered_df[dept_col].value_counts().reset_index()
             dept_counts.columns = ["Department", "Count"]
+
+            # Multi-color qualitative palette for distinct bar colors per department
             fig_dept = px.bar(
                 dept_counts,
                 x="Department",
                 y="Count",
+                color="Department",
+                color_discrete_sequence=px.colors.qualitative.Bold,
                 labels={
                     "Department": "Department",
                     "Count": "Project Count",
                 },
-                color="Count",
-                color_continuous_scale="Greens",
             )
             fig_dept.update_layout(
                 xaxis_tickangle=-45,
@@ -586,11 +594,21 @@ if not df.empty:
 
     with col_right:
         if status_col:
+            # Semantic color mapping for project status clarity
+            status_color_map = {
+                "Completed": "#2e7d32",  # Dark Green
+                "Approved": "#4caf50",   # Light Green
+                "Active": "#0288d1",     # Royal Blue
+                "Pending": "#f57c00",    # Orange
+                "Rejected": "#d32f2f",   # Red
+            }
+
             fig_status = px.pie(
                 filtered_df,
                 names=status_col,
                 hole=0.4,
-                color_discrete_sequence=px.colors.sequential.Greens[::-1],
+                color=status_col,
+                color_discrete_map=status_color_map,
             )
             fig_status.update_layout(margin=dict(t=20, b=20))
             st.plotly_chart(fig_status, use_container_width=True)
