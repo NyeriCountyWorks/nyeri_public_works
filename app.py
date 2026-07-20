@@ -1,9 +1,9 @@
+import base64
+import os
 import sqlite3
+import textwrap
 import pandas as pd
 import plotly.express as px
-import os
-import base64
-import textwrap
 import streamlit as st
 
 # --- Nyeri County Seal Vector Fallback ---
@@ -216,178 +216,212 @@ st.sidebar.markdown("---")
 st.title("🏛️ Department of Public Works, Roads & Infrastructure")
 st.subheader("County Government of Nyeri — Executive MIS Dashboard")
 
-try:
-    conn = sqlite3.connect("nyeri_public_works.db")
-    cursor = conn.cursor()
-    cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
-    tables = [row[0] for row in cursor.fetchall()]
 
-    # Strictly query the 'projects' table
-    if "projects" in tables:
-        df = pd.read_sql_query("SELECT * FROM projects", conn)
-    else:
-        df = pd.DataFrame()
+def fetch_project_data():
+    try:
+        conn = sqlite3.connect("nyeri_public_works.db")
+        cursor = conn.cursor()
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
+        tables = [row[0] for row in cursor.fetchall()]
 
-    conn.close()
+        if not tables:
+            conn.close()
+            return pd.DataFrame()
 
-    if not df.empty:
-        st.sidebar.header("📊 Filter Projects")
+        # Exclude system/user management tables
+        ignored_tables = ["users", "audit_trail", "sqlite_sequence"]
+        candidate_tables = [t for t in tables if t.lower() not in ignored_tables]
 
-        dept_col = next(
-            (
-                c
-                for c in df.columns
-                if c.lower() in ["department", "dept", "dept_name"]
-            ),
-            None,
-        )
-        status_col = next(
-            (
-                c
-                for c in df.columns
-                if c.lower() in ["status", "project_status", "stage"]
-            ),
-            None,
-        )
-        budget_col = next(
-            (
-                c
-                for c in df.columns
-                if c.lower() in ["budget", "cost", "allocated_budget", "amount"]
-            ),
-            None,
-        )
-        name_col = next(
-            (
-                c
-                for c in df.columns
-                if c.lower() in ["project_name", "name", "title"]
-            ),
-            df.columns[0],
-        )
+        target_table = None
 
-        filtered_df = df.copy()
+        # Auto-detect project or registry tables
+        for t in candidate_tables:
+            if "project" in t.lower() or "registry" in t.lower():
+                target_table = t
+                break
 
-        if dept_col:
-            departments = ["All"] + list(filtered_df[dept_col].dropna().unique())
-            selected_dept = st.sidebar.selectbox(
-                "Filter by Department", departments
-            )
-            if selected_dept != "All":
-                filtered_df = filtered_df[
-                    filtered_df[dept_col] == selected_dept
-                ]
+        if not target_table and candidate_tables:
+            target_table = candidate_tables[0]
 
-        if status_col:
-            statuses = ["All"] + list(filtered_df[status_col].dropna().unique())
-            selected_status = st.sidebar.selectbox(
-                "Filter by Status", statuses
-            )
-            if selected_status != "All":
-                filtered_df = filtered_df[
-                    filtered_df[status_col] == selected_status
-                ]
+        if target_table:
+            df = pd.read_sql_query(f"SELECT * FROM {target_table}", conn)
+            conn.close()
+            return df
 
-        # --- KPI METRICS ---
-        st.subheader(
-            f"Executive Summary ({len(filtered_df)} Projects Displayed)"
-        )
-        kpi1, kpi2, kpi3, kpi4 = st.columns(4)
+        conn.close()
+        return pd.DataFrame()
+    except Exception as e:
+        st.error(f"Database error: {e}")
+        return pd.DataFrame()
 
-        total_proj = len(filtered_df)
-        completed_proj = 0
-        pending_proj = 0
 
-        if status_col:
-            completed_proj = len(
-                filtered_df[
-                    filtered_df[status_col]
-                    .str.lower()
-                    .str.contains("complete", na=False)
-                ]
-            )
-            pending_proj = total_proj - completed_proj
+df = fetch_project_data()
 
-        total_budget = 0.0
-        if budget_col:
-            total_budget = pd.to_numeric(
-                filtered_df[budget_col], errors="coerce"
-            ).sum()
+if not df.empty:
+    st.sidebar.header("📊 Filter Projects")
 
-        kpi1.metric("Total Projects", total_proj)
-        kpi2.metric("Completed Projects", completed_proj)
-        kpi3.metric("Pending Projects", pending_proj)
-        kpi4.metric("Total Budget Allocated", f"KES {total_budget:,.2f}")
-
-        # --- CHARTS ---
-        col_left, col_right = st.columns(2)
-
-        with col_left:
-            if dept_col:
-                dept_counts = (
-                    filtered_df[dept_col].value_counts().reset_index()
-                )
-                dept_counts.columns = ["Department", "Count"]
-                fig_dept = px.bar(
-                    dept_counts,
-                    x="Department",
-                    y="Count",
-                    labels={
-                        "Department": "Department",
-                        "Count": "Project Count",
-                    },
-                    color="Count",
-                    color_continuous_scale="Greens",
-                )
-                fig_dept.update_layout(
-                    xaxis_tickangle=-45,
-                    showlegend=False,
-                    margin=dict(t=20, b=20),
-                )
-                st.plotly_chart(fig_dept, use_container_width=True)
-            else:
-                st.info("No department data column found.")
-
-        with col_right:
-            if status_col:
-                fig_status = px.pie(
-                    filtered_df,
-                    names=status_col,
-                    hole=0.4,
-                    color_discrete_sequence=px.colors.sequential.Greens[::-1],
-                )
-                fig_status.update_layout(margin=dict(t=20, b=20))
-                st.plotly_chart(fig_status, use_container_width=True)
-            else:
-                st.info("No status data column found.")
-
-        # --- BUDGET OVERSIGHT ---
-        st.subheader("⚠️ High-Value Budget Oversight")
-        if budget_col:
-            temp_df = filtered_df.copy()
-            temp_df[budget_col] = pd.to_numeric(
-                temp_df[budget_col], errors="coerce"
-            ).fillna(0)
-            top_budget = temp_df.sort_values(
-                by=budget_col, ascending=False
-            ).head(5)
-            cols_to_show = [
-                c
-                for c in [name_col, dept_col, status_col, budget_col]
-                if c and c in top_budget.columns
+    # Flexible column detection matching registry database schema
+    dept_col = next(
+        (
+            c
+            for c in df.columns
+            if c.lower()
+            in [
+                "department_assigned",
+                "department",
+                "dept",
+                "dept_name",
+                "assigned_department",
             ]
-            st.dataframe(top_budget[cols_to_show], use_container_width=True)
-        else:
-            st.info("No budget data column found.")
+        ),
+        None,
+    )
+    status_col = next(
+        (
+            c
+            for c in df.columns
+            if c.lower()
+            in [
+                "current_status",
+                "status",
+                "project_status",
+                "stage",
+                "state",
+            ]
+        ),
+        None,
+    )
+    budget_col = next(
+        (
+            c
+            for c in df.columns
+            if c.lower()
+            in [
+                "budget_allocated",
+                "budget",
+                "cost",
+                "allocated_budget",
+                "amount",
+                "budget_allocated_kes",
+            ]
+        ),
+        None,
+    )
+    name_col = next(
+        (
+            c
+            for c in df.columns
+            if c.lower() in ["project_name", "name", "title", "project_title"]
+        ),
+        df.columns[0],
+    )
 
-        # --- FULL TABLE ---
-        st.subheader("Project Details Table")
-        st.dataframe(filtered_df, use_container_width=True)
+    filtered_df = df.copy()
 
-    else:
-        st.warning(
-            "No project data found in the `projects` table. Please insert project records into `nyeri_public_works.db` or add them via the Registry page."
+    if dept_col:
+        departments = ["All"] + list(filtered_df[dept_col].dropna().unique())
+        selected_dept = st.sidebar.selectbox("Filter by Department", departments)
+        if selected_dept != "All":
+            filtered_df = filtered_df[filtered_df[dept_col] == selected_dept]
+
+    if status_col:
+        statuses = ["All"] + list(filtered_df[status_col].dropna().unique())
+        selected_status = st.sidebar.selectbox("Filter by Status", statuses)
+        if selected_status != "All":
+            filtered_df = filtered_df[filtered_df[status_col] == selected_status]
+
+    # --- KPI METRICS ---
+    st.subheader(f"Executive Summary ({len(filtered_df)} Projects Displayed)")
+    kpi1, kpi2, kpi3, kpi4 = st.columns(4)
+
+    total_proj = len(filtered_df)
+    completed_proj = 0
+    pending_proj = 0
+
+    if status_col:
+        completed_proj = len(
+            filtered_df[
+                filtered_df[status_col]
+                .astype(str)
+                .str.lower()
+                .str.contains("complete|done|finished|active", na=False)
+            ]
         )
+        pending_proj = total_proj - completed_proj
 
-except Exception as e:
-    st.error(f"Could not load data: {e}")
+    total_budget = 0.0
+    if budget_col:
+        total_budget = pd.to_numeric(
+            filtered_df[budget_col], errors="coerce"
+        ).sum()
+
+    kpi1.metric("Total Projects", total_proj)
+    kpi2.metric("Completed / Active Projects", completed_proj)
+    kpi3.metric("Pending Projects", pending_proj)
+    kpi4.metric("Total Budget Allocated", f"KES {total_budget:,.2f}")
+
+    # --- CHARTS ---
+    col_left, col_right = st.columns(2)
+
+    with col_left:
+        if dept_col:
+            dept_counts = filtered_df[dept_col].value_counts().reset_index()
+            dept_counts.columns = ["Department", "Count"]
+            fig_dept = px.bar(
+                dept_counts,
+                x="Department",
+                y="Count",
+                labels={
+                    "Department": "Department",
+                    "Count": "Project Count",
+                },
+                color="Count",
+                color_continuous_scale="Greens",
+            )
+            fig_dept.update_layout(
+                xaxis_tickangle=-45,
+                showlegend=False,
+                margin=dict(t=20, b=20),
+            )
+            st.plotly_chart(fig_dept, use_container_width=True)
+        else:
+            st.info("No department data column found.")
+
+    with col_right:
+        if status_col:
+            fig_status = px.pie(
+                filtered_df,
+                names=status_col,
+                hole=0.4,
+                color_discrete_sequence=px.colors.sequential.Greens[::-1],
+            )
+            fig_status.update_layout(margin=dict(t=20, b=20))
+            st.plotly_chart(fig_status, use_container_width=True)
+        else:
+            st.info("No status data column found.")
+
+    # --- BUDGET OVERSIGHT ---
+    st.subheader("⚠️ High-Value Budget Oversight")
+    if budget_col:
+        temp_df = filtered_df.copy()
+        temp_df[budget_col] = pd.to_numeric(
+            temp_df[budget_col], errors="coerce"
+        ).fillna(0)
+        top_budget = temp_df.sort_values(by=budget_col, ascending=False).head(5)
+        cols_to_show = [
+            c
+            for c in [name_col, dept_col, status_col, budget_col]
+            if c and c in top_budget.columns
+        ]
+        st.dataframe(top_budget[cols_to_show], use_container_width=True)
+    else:
+        st.info("No budget data column found.")
+
+    # --- FULL TABLE ---
+    st.subheader("Project Details Table")
+    st.dataframe(filtered_df, use_container_width=True)
+
+else:
+    st.warning(
+        "No project data found. Please add projects via the Registry page."
+    )
