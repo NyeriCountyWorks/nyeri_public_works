@@ -46,56 +46,64 @@ def inject_custom_styles():
     st.markdown(
         """
     <style>
-        /* Sidebar dark green gradient */
+        /* Sidebar background gradient */
         [data-testid="stSidebar"] {
             background-color: #0A4D20 !important;
             background-image: linear-gradient(180deg, #0A4D20 0%, #041f0d 100%) !important;
-            color: #FFFFFF !important;
         }
-        /* All sidebar text and labels */
+
+        /* Standard sidebar text (without breaking icons) */
         [data-testid="stSidebar"] p, 
-        [data-testid="stSidebar"] span, 
         [data-testid="stSidebar"] h1, 
         [data-testid="stSidebar"] h2, 
         [data-testid="stSidebar"] h3, 
         [data-testid="stSidebar"] h4, 
-        [data-testid="stSidebar"] h5, 
-        [data-testid="stSidebar"] h6,
-        [data-testid="stSidebar"] label,
-        [data-testid="stSidebar"] div {
+        [data-testid="stSidebar"] label {
             color: #FFFFFF !important;
             font-family: 'Poppins', sans-serif;
         }
-        /* Sidebar active navigation item styling */
-        [data-testid="stSidebarNav"] a {
+
+        /* Sidebar Navigation Items */
+        [data-testid="stSidebarNav"] a span {
             color: #FFFFFF !important;
-            border-radius: 8px !important;
-            margin: 2px 0 !important;
         }
+
         [data-testid="stSidebarNav"] a[aria-current="page"] {
             background-color: rgba(212, 175, 55, 0.25) !important;
             border-left: 4px solid #D4AF37 !important;
-            font-weight: bold !important;
+            border-radius: 4px !important;
         }
-        /* Sidebar bold text in gold */
+
+        /* Sidebar user labels */
         [data-testid="stSidebar"] strong {
             color: #D4AF37 !important;
         }
-        /* Sidebar buttons */
-        [data-testid="stSidebar"] button {
-            background-color: #FFFFFF !important;
-            color: #0A4D20 !important;
-            border: 2px solid #D4AF37 !important;
-            border-radius: 20px !important;
-            font-weight: bold !important;
-            width: 100% !important;
-        }
-        [data-testid="stSidebar"] button:hover {
+
+        /* FIX: High-contrast Gold Logout Button with visible dark text */
+        div[data-testid="stSidebar"] button {
             background-color: #D4AF37 !important;
-            color: #041f0d !important;
+            border: 1px solid #AA7C11 !important;
+            border-radius: 20px !important;
+            width: 100% !important;
+            margin-top: 10px !important;
+        }
+
+        div[data-testid="stSidebar"] button p,
+        div[data-testid="stSidebar"] button span {
+            color: #0A4D20 !important;
+            font-weight: 700 !important;
+        }
+
+        div[data-testid="stSidebar"] button:hover {
+            background-color: #FFFFFF !important;
             border-color: #FFFFFF !important;
         }
-        
+
+        div[data-testid="stSidebar"] button:hover p,
+        div[data-testid="stSidebar"] button:hover span {
+            color: #0A4D20 !important;
+        }
+
         /* Custom Green Badges for Filenames */
         .filename-badge {
             background-color: #e8f5e9;
@@ -108,8 +116,8 @@ def inject_custom_styles():
             display: inline-block;
             margin-bottom: 10px;
         }
-        
-        /* Main page headers color */
+
+        /* Main Page Headings */
         h1, h2, h3 {
             color: #0A4D20 !important;
         }
@@ -133,7 +141,7 @@ sidebar_header_html = textwrap.dedent(f"""
 """)
 st.sidebar.markdown(sidebar_header_html, unsafe_allow_html=True)
 
-# User session check
+# User session info
 if "username" in st.session_state:
     st.sidebar.markdown(f"**👤 User:** {st.session_state.get('username')}")
     st.sidebar.markdown(f"**🛡️ Role:** {st.session_state.get('role', 'Viewer')}")
@@ -163,23 +171,29 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# --- (Your Data Table Logic Here) ---
 st.subheader("Project Registry Master List")
-# ... Add your existing table rendering code here ...
+# ... (Your SQLite database query & table rendering code goes here) ...
 
 st.markdown("---")
 
-# --- 5. STYLED ATTACHMENT VIEWER SECTION ---
+# --- 5. STYLED ATTACHMENT VIEWER ---
 st.subheader("📎 Project Attachment Viewer")
 
-projects = ["kahuti-ini Pry Sch", "Nyeri General Hospital Wing", "Mukurwe-ini Water Works"]
-selected_project = st.selectbox("Select Project to Inspect Attachment", projects)
+projects = [
+    "kahuti-ini Pry Sch",
+    "Nyeri General Hospital Wing",
+    "Mukurwe-ini Water Works",
+]
+selected_project = st.selectbox(
+    "Select Project to Inspect Attachment", projects
+)
 
-# Dynamic Filename Badge with Custom Green & Gold styling
 sample_filename = "Nyeri_Public_Works_Report.xlsx"
-st.markdown(f"**Filename:** <span class='filename-badge'>{sample_filename}</span>", unsafe_allow_html=True)
+st.markdown(
+    f"**Filename:** <span class='filename-badge'>{sample_filename}</span>",
+    unsafe_allow_html=True,
+)
 
-# Styled Download Button
 dummy_data = b"Nyeri County Government Public Works Sample Excel Attachment"
 st.download_button(
     label=f"📥 Download {sample_filename}",
