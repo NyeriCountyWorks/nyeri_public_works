@@ -3,6 +3,7 @@ import datetime
 import os
 import sqlite3
 import textwrap
+import numpy as np
 import pandas as pd
 import plotly.express as px
 import streamlit as st
@@ -518,6 +519,22 @@ if not df.empty:
         ),
         df.columns[0],
     )
+    subcounty_col = next(
+        (
+            c
+            for c in df.columns
+            if c.lower()
+            in [
+                "sub_county",
+                "subcounty",
+                "ward",
+                "sub_county_ward",
+                "location",
+                "site_location",
+            ]
+        ),
+        None,
+    )
 
     filtered_df = df.copy()
 
@@ -614,6 +631,79 @@ if not df.empty:
             st.plotly_chart(fig_status, use_container_width=True)
         else:
             st.info("No status data column found.")
+
+    # --- GIS INTERACTIVE NYERI MAP ---
+    st.subheader("🗺️ Nyeri County Project GIS Map")
+
+    NYERI_COORDINATES = {
+        "mathira east": (-0.4812, 37.1281),
+        "mathira west": (-0.4285, 37.0600),
+        "othaya": (-0.5439, 36.9472),
+        "othaya central": (-0.5439, 36.9472),
+        "mukurweini": (-0.5606, 37.0483),
+        "tetu": (-0.4350, 36.8833),
+        "nyeri town": (-0.4201, 36.9476),
+        "karatina": (-0.4812, 37.1281),
+        "kieni east": (-0.1500, 37.0500),
+        "kieni west": (-0.2800, 36.8500),
+    }
+
+    def assign_coordinates(row):
+        loc_str = ""
+        if subcounty_col and row.get(subcounty_col):
+            loc_str += str(row.get(subcounty_col)).lower()
+        if name_col and row.get(name_col):
+            loc_str += " " + str(row.get(name_col)).lower()
+
+        for key, coords in NYERI_COORDINATES.items():
+            if key in loc_str:
+                return coords
+        return (-0.4201, 36.9476)  # Default center: Nyeri Town
+
+    map_df = filtered_df.copy()
+    coords = map_df.apply(assign_coordinates, axis=1)
+    map_df["latitude"] = [c[0] for c in coords]
+    map_df["longitude"] = [c[1] for c in coords]
+
+    # Add slight random jitter to prevent markers at exact same spot from overlapping completely
+    np.random.seed(42)
+    map_df["latitude"] += np.random.uniform(-0.008, 0.008, size=len(map_df))
+    map_df["longitude"] += np.random.uniform(-0.008, 0.008, size=len(map_df))
+
+    status_color_map = {
+        "Completed": "#2e7d32",
+        "Approved": "#4caf50",
+        "Active": "#0288d1",
+        "Pending": "#f57c00",
+        "Rejected": "#d32f2f",
+    }
+
+    hover_cols = {}
+    if dept_col:
+        hover_cols[dept_col] = True
+    if status_col:
+        hover_cols[status_col] = True
+    if budget_col:
+        hover_cols[budget_col] = ":,.2f"
+    hover_cols["latitude"] = False
+    hover_cols["longitude"] = False
+
+    fig_map = px.scatter_mapbox(
+        map_df,
+        lat="latitude",
+        lon="longitude",
+        hover_name=name_col,
+        hover_data=hover_cols,
+        color=status_col if status_col else None,
+        color_discrete_map=status_color_map,
+        zoom=9.5,
+        center={"lat": -0.4201, "lon": 36.9476},
+        height=450,
+    )
+    fig_map.update_layout(
+        mapbox_style="open-street-map", margin={"r": 0, "t": 10, "l": 0, "b": 10}
+    )
+    st.plotly_chart(fig_map, use_container_width=True)
 
     # --- BUDGET OVERSIGHT ---
     st.subheader("⚠️ High-Value Budget Oversight")
