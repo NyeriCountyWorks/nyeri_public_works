@@ -32,7 +32,8 @@ def init_enterprise_gov_db():
             cursor.execute("INSERT INTO users (username, password, full_name, role, department) VALUES ('CECM_Nyeri', 'cecm123', 'Hon. Charles Wanjohi', 'CECM', 'Executive')")
             cursor.execute("INSERT INTO users (username, password, full_name, role, department) VALUES ('CO_Infra', 'chief123', 'Hon. Joseph Maina', 'Chief Officer', 'Infrastructure')")
             cursor.execute("INSERT INTO users (username, password, full_name, role, department) VALUES ('DIR_Roads', 'dir123', 'Dr. Lucy Wambui', 'Director', 'Roads & Transport')")
-            cursor.execute("INSERT INTO users (username, password, full_name, role, department) VALUES ('ENG_Mwangi', 'eng123', 'Eng. John Mwangi', 'County Engineer', 'Roads & Transport')")
+            cursor.execute("INSERT INTO users (username, password, full_name, role, department) VALUES ('ENG_Mwangi', 'eng123', 'Eng. John Mwangi', 'Engineer', 'Roads & Transport')")
+            cursor.execute("INSERT INTO users (username, password, full_name, role, department) VALUES ('FIN_Wanjiku', 'fin123', 'CPA Mary Wanjiku', 'Finance', 'Finance & Economic Planning')")
 
         # 2. Project Lifecycle Master Table
         cursor.execute('''
@@ -107,7 +108,22 @@ def init_enterprise_gov_db():
             cursor.execute("INSERT INTO executive_approvals (project_code, item_title, stage, status, submitted_by, timestamp) VALUES ('PRJ-2026-004', 'Mukurwe-ini Additional Funding Budget Reallocation', 'Budget Approval', 'Pending', 'Dr. Lucy Wambui', '2026-07-21 08:30:00')")
             cursor.execute("INSERT INTO executive_approvals (project_code, item_title, stage, status, submitted_by, timestamp) VALUES ('PRJ-2026-001', 'Karatina Phase II Site Variation Sign-off', 'Technical Review', 'Pending', 'Eng. David Kariuki', '2026-07-21 10:15:00')")
 
-        # 5. Risk Register
+        # 5. Financial Invoices & Payments
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS financial_invoices (
+                invoice_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                project_code TEXT,
+                contractor TEXT,
+                amount REAL,
+                status TEXT DEFAULT 'Pending Verification',
+                invoice_date TEXT
+            )
+        ''')
+        if cursor.execute("SELECT COUNT(*) FROM financial_invoices").fetchone()[0] == 0:
+            cursor.execute("INSERT INTO financial_invoices (project_code, contractor, amount, status, invoice_date) VALUES ('PRJ-2026-001', 'Apex Builders Ltd', 4500000.0, 'Pending Verification', '2026-07-19')")
+            cursor.execute("INSERT INTO financial_invoices (project_code, contractor, amount, status, invoice_date) VALUES ('PRJ-2026-002', 'Mount Kenya Construction', 12000000.0, 'Disbursed', '2026-05-20')")
+
+        # 6. Risk Register
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS risk_register (
                 risk_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -122,7 +138,7 @@ def init_enterprise_gov_db():
         if cursor.execute("SELECT COUNT(*) FROM risk_register").fetchone()[0] == 0:
             cursor.execute("INSERT INTO risk_register (project_code, risk_description, severity, mitigation_strategy, risk_owner) VALUES ('PRJ-2026-004', 'Severe cost overrun due to unexpected soil instability', 'High', 'Request re-allocation from contingency fund', 'Director')")
 
-        # 6. Site Inspections
+        # 7. Site Inspections
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS site_inspections (
                 inspection_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -136,23 +152,8 @@ def init_enterprise_gov_db():
                 next_inspection_date TEXT
             )
         ''')
-
-        # 7. Asset Register
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS asset_register (
-                asset_id INTEGER PRIMARY KEY AUTOINCREMENT,
-                project_code TEXT,
-                asset_name TEXT,
-                asset_category TEXT,
-                sub_county TEXT,
-                condition_rating TEXT,
-                warranty_expiry TEXT,
-                last_inspection_date TEXT,
-                maintenance_schedule TEXT
-            )
-        ''')
-        if cursor.execute("SELECT COUNT(*) FROM asset_register").fetchone()[0] == 0:
-            cursor.execute("INSERT INTO asset_register (project_code, asset_name, asset_category, sub_county, condition_rating, warranty_expiry, last_inspection_date, maintenance_schedule) VALUES ('PRJ-2026-002', 'Othaya Hospital Medical Wing B', 'Buildings', 'Othaya', '🟢 Excellent', '2028-05-15', '2026-06-01', 'Bi-Annual HVAC Check')")
+        if cursor.execute("SELECT COUNT(*) FROM site_inspections").fetchone()[0] == 0:
+            cursor.execute("INSERT INTO site_inspections (project_code, engineer_name, inspection_date, gps_coordinates, weather, defects_found, recommendations, next_inspection_date) VALUES ('PRJ-2026-001', 'Eng. John Mwangi', '2026-07-20', '-0.4201, 36.9475', 'Sunny / Dry', 'Minor hairline cracking on slab corner', 'Apply epoxy injection sealing', '2026-08-05')")
 
         # 8. Audit Logs
         cursor.execute('''CREATE TABLE IF NOT EXISTS audit_logs (log_id INTEGER PRIMARY KEY AUTOINCREMENT, timestamp DATETIME, username TEXT, role TEXT, action TEXT, target_record TEXT, details TEXT)''')
@@ -207,28 +208,37 @@ def format_currency_short(val):
 
 
 # ==========================================
-# 2. CUSTOM STYLES
+# 2. CUSTOM STYLES & ACCESSIBILITY
 # ==========================================
-def inject_custom_styles():
-    st.markdown("""
+def inject_custom_styles(high_contrast=False, large_font=False):
+    bg_sidebar = "#0A4D20" if not high_contrast else "#000000"
+    text_color = "#111827" if not high_contrast else "#000000"
+    font_size_multiplier = "1.15" if large_font else "1.0"
+
+    st.markdown(f"""
     <style>
-        [data-testid="stSidebar"] {
-            background-color: #0A4D20 !important;
-            background-image: linear-gradient(180deg, #0A4D20 0%, #031e0c 100%) !important;
+        html, body, [class*="css"] {{
+            font-size: {font_size_multiplier}rem !important;
+        }}
+        [data-testid="stSidebar"] {{
+            background-color: {bg_sidebar} !important;
+            background-image: linear-gradient(180deg, {bg_sidebar} 0%, #031e0c 100%) !important;
             color: #FFFFFF !important;
-        }
-        [data-testid="stSidebar"] p, [data-testid="stSidebar"] span, [data-testid="stSidebar"] label {
+        }}
+        [data-testid="stSidebar"] p, [data-testid="stSidebar"] span, [data-testid="stSidebar"] label {{
             color: #FFFFFF !important;
             font-family: 'Inter', sans-serif;
-        }
-        .dec-card {
-            background: #FFFFFF; border-radius: 8px; padding: 14px 16px; border: 1px solid #E5E7EB;
+        }}
+        .dec-card {{
+            background: {"#FFFFFF" if not high_contrast else "#F3F4F6"}; 
+            border-radius: 8px; padding: 14px 16px; border: {"1px solid #E5E7EB" if not high_contrast else "2px solid #000000"};
             box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); text-align: left;
-        }
-        .dec-title { font-size: 11px; font-weight: 700; color: #6B7280; text-transform: uppercase; }
-        .dec-value { font-size: 22px; font-weight: 800; color: #111827; margin: 4px 0; }
-        .security-banner { background-color: #FEF2F2; border-left: 4px solid #DC2626; padding: 10px; font-size: 12px; color: #991B1B; margin-bottom: 15px; }
-        .compliance-footer { font-size: 11px; color: #6B7280; text-align: center; margin-top: 30px; line-height: 1.4; }
+        }}
+        .dec-title {{ font-size: 11px; font-weight: 700; color: #6B7280; text-transform: uppercase; }}
+        .dec-value {{ font-size: 22px; font-weight: 800; color: #111827; margin: 4px 0; }}
+        .security-banner {{ background-color: #FEF2F2; border-left: 4px solid #DC2626; padding: 10px; font-size: 12px; color: #991B1B; margin-bottom: 15px; }}
+        .compliance-footer {{ font-size: 11px; color: #6B7280; text-align: center; margin-top: 20px; line-height: 1.4; }}
+        .sec-indicator-bar {{ display: flex; justify-content: space-between; font-size: 11px; color: #4B5563; background: #F9FAFB; padding: 6px 12px; border-radius: 4px; border: 1px solid #E5E7EB; margin-bottom: 15px; }}
     </style>
     """, unsafe_allow_html=True)
 
@@ -237,29 +247,53 @@ def inject_custom_styles():
 # 3. SESSION STATE & ROUTING
 # ==========================================
 st.set_page_config(page_title="Nyeri County Government Enterprise MIS", layout="wide", initial_sidebar_state="expanded")
-inject_custom_styles()
-init_enterprise_gov_db()
 
 if "authenticated" not in st.session_state: st.session_state["authenticated"] = False
 if "mfa_pending" not in st.session_state: st.session_state["mfa_pending"] = False
 if "mfa_user_data" not in st.session_state: st.session_state["mfa_user_data"] = None
 if "is_public" not in st.session_state: st.session_state["is_public"] = False
+if "failed_attempts" not in st.session_state: st.session_state["failed_attempts"] = {}
+if "high_contrast" not in st.session_state: st.session_state["high_contrast"] = False
+if "large_font" not in st.session_state: st.session_state["large_font"] = False
+
+inject_custom_styles(st.session_state["high_contrast"], st.session_state["large_font"])
+init_enterprise_gov_db()
 
 
 # ==========================================
 # 4. LOGIN / GATEWAY INTERFACE
 # ==========================================
 if not st.session_state["authenticated"] and not st.session_state["is_public"]:
-    st.markdown("<h1 style='text-align: center; color: #0A4D20;'>🏛️ County Government of Nyeri</h1>", unsafe_allow_html=True)
-    st.markdown("<h3 style='text-align: center; color: #D4AF37; margin-top: -15px;'>Enterprise Infrastructure BPM & Governance MIS</h3>", unsafe_allow_html=True)
-    st.markdown("<br/>", unsafe_allow_html=True)
+    # Accessibility Controls Top-Right
+    col_top1, col_top2 = st.columns([8, 2])
+    with col_top2:
+        with st.expander("♿ Accessibility"):
+            st.session_state["high_contrast"] = st.checkbox("High Contrast Mode", value=st.session_state["high_contrast"])
+            st.session_state["large_font"] = st.checkbox("Larger Font Option", value=st.session_state["large_font"])
+            if st.button("Apply Accessibility"):
+                st.rerun()
 
-    col_a, col_b, col_c = st.columns([1, 1.3, 1])
+    # Government Identity Header
+    st.markdown("<h2 style='text-align: center; color: #0A4D20; margin-bottom: 0;'>County Government of Nyeri</h2>", unsafe_allow_html=True)
+    st.markdown("<h4 style='text-align: center; color: #4B5563; margin-top: 5px;'>Department of Roads, Public Works & Transport</h4>", unsafe_allow_html=True)
+    st.markdown("<h3 style='text-align: center; color: #D4AF37; margin-top: -5px;'>Enterprise Infrastructure BPM & Governance MIS</h3>", unsafe_allow_html=True)
+    st.markdown("<div style='text-align: center; font-size: 12px; color: #6B7280; margin-bottom: 15px;'>🏛️ Official County Coat of Arms Gateway | Version 1.0.0 © County Government of Nyeri</div>", unsafe_allow_html=True)
+
+    col_a, col_b, col_c = st.columns([1, 1.4, 1])
     with col_b:
         t_login, t_pub = st.tabs(["🔒 Government Officer Sign In", "🌐 Citizen Open Data Portal"])
         
         with t_login:
-            # Handle MFA Verification Step if triggered for senior officials
+            # Security Indicator bar
+            st.markdown("""
+            <div class="sec-indicator-bar">
+                <span>🔒 Secure HTTPS Connection</span>
+                <span>🟢 System Status: Operational</span>
+                <span>v1.0.0</span>
+            </div>
+            """, unsafe_allow_html=True)
+
+            # MFA Verification Step if triggered for senior officials
             if st.session_state["mfa_pending"]:
                 st.info("🔐 Multi-Factor Authentication (MFA) Required for Senior Official / Admin.")
                 st.write(f"Enter the 4-digit authenticator code sent for user: **{st.session_state['mfa_user_data']['full_name']}** (Demo Code: `1234`)")
@@ -280,35 +314,48 @@ if not st.session_state["authenticated"] and not st.session_state["is_public"]:
                             st.error("Invalid OTP code. Try '1234'.")
             else:
                 with st.form("clean_login_form"):
-                    st.subheader("Official Staff Authentication")
                     u_input = st.text_input("Username or Employee Number")
                     p_input = st.text_input("Password", type="password")
                     
                     st.markdown("""
                     <div class="security-banner">
-                        <strong>Authorized Government Personnel Only.</strong><br/>
-                        All access is monitored and recorded. Unauthorized access is strictly prohibited.
+                        <strong>Government Information System</strong><br/>
+                        Access is restricted to authorized County Government personnel. All authentication attempts and system activities are logged for security, audit, and compliance purposes.
                     </div>
                     """, unsafe_allow_html=True)
 
-                    if st.form_submit_button("Sign In Securely", use_container_width=True):
-                        user_data = verify_login(u_input, p_input)
-                        if user_data:
-                            # Enforce MFA for CECM, Chief Officer, or Admin roles
-                            if user_data["role"] in ["CECM", "Chief Officer", "Admin"]:
-                                st.session_state["mfa_pending"] = True
-                                st.session_state["mfa_user_data"] = user_data
-                                st.rerun()
-                            else:
-                                st.session_state["authenticated"] = True
-                                st.session_state["username"] = user_data["username"]
-                                st.session_state["role"] = user_data["role"]
-                                st.session_state["full_name"] = user_data["full_name"]
-                                st.session_state["department"] = user_data["department"]
-                                log_audit_action(user_data["username"], user_data["role"], "Login", "System", "Authenticated successfully")
-                                st.rerun()
+                    submitted = st.form_submit_button("Sign In Securely", use_container_width=True)
+                    st.markdown("<div style='text-align: center; font-size: 11px; color: #6B7280; margin-top: 5px;'>Session Timeout: 15 Minutes of inactivity</div>", unsafe_allow_html=True)
+
+                    if submitted:
+                        # Check lockout
+                        ip_key = u_input.strip().lower()
+                        attempts = st.session_state["failed_attempts"].get(ip_key, 0)
+                        if attempts >= 3:
+                            st.error("Account temporarily locked due to repeated failed attempts. Contact ICT Service Desk.")
                         else:
-                            st.error("Invalid credentials. Please verify your employee ID and password.")
+                            user_data = verify_login(u_input, p_input)
+                            if user_data:
+                                st.session_state["failed_attempts"][ip_key] = 0
+                                # Enforce MFA for CECM, Chief Officer, or Admin roles
+                                if user_data["role"] in ["CECM", "Chief Officer", "Admin"]:
+                                    st.session_state["mfa_pending"] = True
+                                    st.session_state["mfa_user_data"] = user_data
+                                    st.rerun()
+                                else:
+                                    st.session_state["authenticated"] = True
+                                    st.session_state["username"] = user_data["username"]
+                                    st.session_state["role"] = user_data["role"]
+                                    st.session_state["full_name"] = user_data["full_name"]
+                                    st.session_state["department"] = user_data["department"]
+                                    log_audit_action(user_data["username"], user_data["role"], "Login", "System", "Authenticated successfully")
+                                    st.rerun()
+                            else:
+                                st.session_state["failed_attempts"][ip_key] = attempts + 1
+                                st.error("Invalid credentials. Please verify your employee ID and password.")
+
+            with st.expander("Need account assistance?"):
+                st.write("Automatic password resets are disabled for internal systems. Please contact the **ICT Service Desk** at ext. 4001 or email `ictsupport@nyeri.go.ke`.")
 
         with t_pub:
             st.subheader("Welcome to the Public Citizen Portal")
@@ -364,29 +411,53 @@ if st.session_state["is_public"]:
 
 
 # ==========================================
-# 6. INTERNAL ENTERPRISE MIS APP
+# 6. INTERNAL ENTERPRISE MIS APP & ROLE WORKSPACES
 # ==========================================
 user_role = st.session_state["role"]
 user_name = st.session_state["full_name"]
 
-# Navigation modules based on role authority
-all_nav_items = [
-    "🏠 Executive Decision Centre",
-    "✍️ Executive Approval Centre",
-    "📁 Projects Lifecycle Pipeline",
-    "📊 Department Performance",
-    "⚠️ Risk & Governance Register",
-    "📄 Classified Records & Documents",
-    "🏗️ Site Inspection Module",
-    "🏛️ County Asset Register",
-    "🤖 AI Executive Briefing",
-    "⚙️ Disaster Recovery & Audit Logs"
-]
-
-if user_role not in ["CECM", "Chief Officer"]:
-    nav_items = [item for item in all_nav_items if item not in ["🏠 Executive Decision Centre", "✍️ Executive Approval Centre", "⚙️ Disaster Recovery & Audit Logs"]]
+# Navigation modules tailored per role specifications
+if user_role == "CECM":
+    nav_items = [
+        "🏠 CECM Executive Workspace",
+        "✍️ Executive Approval Centre",
+        "📁 Projects Lifecycle Pipeline",
+        "📊 Department Performance",
+        "⚠️ Risk & Governance Register",
+        "🤖 AI Executive Briefing"
+    ]
+elif user_role == "Chief Officer":
+    nav_items = [
+        "🏢 Chief Officer Workspace",
+        "✍️ Executive Approval Centre",
+        "📁 Projects Lifecycle Pipeline",
+        "📊 Department Performance",
+        "⚠️ Risk & Governance Register",
+        "📄 Classified Records & Documents"
+    ]
+elif user_role == "Engineer":
+    nav_items = [
+        "🏗️ Engineer Field Workspace",
+        "📁 Projects Lifecycle Pipeline",
+        "🏗️ Site Inspection Module",
+        "📄 Classified Records & Documents"
+    ]
+elif user_role == "Finance":
+    nav_items = [
+        "💰 Finance & Treasury Workspace",
+        "📊 Department Performance",
+        "📄 Classified Records & Documents"
+    ]
 else:
-    nav_items = all_nav_items
+    nav_items = [
+        "📁 Projects Lifecycle Pipeline",
+        "🏗️ Site Inspection Module",
+        "⚠️ Risk & Governance Register"
+    ]
+
+# Common administrative add-ons for high-level roles
+if user_role in ["CECM", "Chief Officer", "Admin"]:
+    nav_items.append("⚙️ Disaster Recovery & Audit Logs")
 
 st.sidebar.markdown(f"""
 <div style="text-align: center; padding: 10px 0;">
@@ -408,11 +479,11 @@ st.divider()
 
 
 # ==========================================
-# MODULE 1: EXECUTIVE DECISION CENTRE
+# WORKSPACE 1: CECM EXECUTIVE WORKSPACE
 # ==========================================
-if nav_choice == "🏠 Executive Decision Centre":
-    st.title("🏠 Executive Decision Centre")
-    st.caption("Strategic Operational Decision Support for CECM & Chief Officers")
+if "CECM Executive Workspace" in nav_choice or nav_choice == "🏠 Executive Decision Centre":
+    st.title(f"Good Morning, {user_name}")
+    st.caption("CECM Strategic Executive Decision Support Workspace")
 
     df_projects = fetch_df("SELECT * FROM projects")
     pending_apps = fetch_df("SELECT COUNT(*) FROM executive_approvals WHERE status = 'Pending'").iloc[0, 0]
@@ -427,32 +498,121 @@ if nav_choice == "🏠 Executive Decision Centre":
     with m3:
         st.markdown(f'<div class="dec-card"><div class="dec-title">Capital at Risk</div><div class="dec-value">{format_currency_short(overrun_amt)}</div><span style="color:#F59E0B; font-size:11px; font-weight:bold;">Delayed Capital</span></div>', unsafe_allow_html=True)
     with m4:
-        st.markdown(f'<div class="dec-card"><div class="dec-title">Critical Open Risks</div><div class="dec-value">1</div><span style="color:#EF4444; font-size:11px; font-weight:bold;">High Severity</span></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="dec-card"><div class="dec-title">County Performance</div><div class="dec-value">{int(df_projects["percentage_complete"].mean())}%</div><span style="color:#0A4D20; font-size:11px; font-weight:bold;">Avg Completion</span></div>', unsafe_allow_html=True)
 
     st.markdown("<div style='margin-top: 25px;'></div>", unsafe_allow_html=True)
 
     c1, c2 = st.columns([2, 1])
     with c1:
-        st.subheader("📊 Strategic Department Performance Comparison")
-        dept_perf = df_projects.groupby("department")["percentage_complete"].mean().reset_index()
-        fig_dept = px.bar(dept_perf, x="department", y="percentage_complete", color="percentage_complete", color_continuous_scale="Greens", text_auto=True)
+        st.subheader("📊 County-Wide Performance & Budget Utilization")
+        dept_perf = df_projects.groupby("department").agg({'percentage_complete': 'mean', 'budget_allocated': 'sum'}).reset_index()
+        fig_dept = px.bar(dept_perf, x="department", y="percentage_complete", color="percentage_complete", color_continuous_scale="Greens", text_auto=True, title="Average Completion by Department")
         st.plotly_chart(fig_dept, use_container_width=True)
     with c2:
-        st.subheader("🔔 Smart Operational Alerts")
-        st.warning("⚠️ **Project Delayed:** Mukurwe-ini Feeder Roads is delayed by 35 days.")
-        st.error("🚨 **Budget Warning:** Mukurwe-ini project spend is at 95.1% of ceiling.")
-        st.info("ℹ️ **Inspection Due:** Karatina Market drainage inspection due in 2 days.")
+        st.subheader("⚠️ Strategic Risks & Executive AI Brief")
+        st.warning("⚠️ **Risk Alert:** Mukurwe-ini soil instability issue logged.")
+        st.info("🤖 **Executive AI Brief:** Infrastructure spend is currently tracking at 88% efficiency against Q3 targets.")
 
 
 # ==========================================
-# MODULE 2: EXECUTIVE APPROVAL CENTRE
+# WORKSPACE 2: CHIEF OFFICER WORKSPACE
+# ==========================================
+elif "Chief Officer Workspace" in nav_choice:
+    st.title(f"Good Morning, {user_name}")
+    st.caption("Chief Officer Operational Oversight Workspace")
+
+    pending_apps = fetch_df("SELECT COUNT(*) FROM executive_approvals WHERE status = 'Pending'").iloc[0, 0]
+    df_projects = fetch_df("SELECT * FROM projects")
+
+    m1, m2, m3 = st.columns(3)
+    with m1:
+        st.markdown(f'<div class="dec-card"><div class="dec-title">Pending Approvals</div><div class="dec-value">{pending_apps}</div></div>', unsafe_allow_html=True)
+    with m2:
+        st.markdown(f'<div class="dec-card"><div class="dec-title">Active Contractors</div><div class="dec-value">{df_projects["contractor"].nunique()}</div></div>', unsafe_allow_html=True)
+    with m3:
+        st.markdown(f'<div class="dec-card"><div class="dec-title">Budget Alerts</div><div class="dec-value">1</div></div>', unsafe_allow_html=True)
+
+    st.divider()
+    st.subheader("📋 Department KPIs & Contractor Issues")
+    st.dataframe(df_projects[["project_code", "project_name", "contractor", "budget_allocated", "status"]], use_container_width=True)
+    
+    st.subheader("📜 Audit Summary")
+    audit_preview = fetch_df("SELECT timestamp, action, target_record FROM audit_logs ORDER BY log_id DESC LIMIT 5")
+    st.dataframe(audit_preview, use_container_width=True)
+
+
+# ==========================================
+# WORKSPACE 3: ENGINEER FIELD WORKSPACE
+# ==========================================
+elif "Engineer Field Workspace" in nav_choice:
+    st.title(f"Field Dashboard: {user_name}")
+    st.caption("County Engineering & Site Inspection Portal")
+
+    df_projects = fetch_df("SELECT * FROM projects")
+    
+    m1, m2 = st.columns(2)
+    with m1:
+        st.markdown(f'<div class="dec-card"><div class="dec-title">Assigned Projects</div><div class="dec-value">{len(df_projects)}</div></div>', unsafe_allow_html=True)
+    with m2:
+        st.markdown(f'<div class="dec-card"><div class="dec-title">Pending Site Inspections</div><div class="dec-value">2 Due</div></div>', unsafe_allow_html=True)
+
+    st.divider()
+    st.subheader("🏗️ Assigned Projects & Progress Update")
+    st.dataframe(df_projects[["project_code", "project_name", "sub_county", "percentage_complete", "lifecycle_stage"]], use_container_width=True)
+
+    st.markdown("### 📝 Quick Progress & Photo Upload")
+    with st.form("engineer_quick_update"):
+        p_sel = st.selectbox("Select Project", df_projects["project_code"].unique())
+        new_prog = st.slider("Update Percentage Complete", 0, 100, 50)
+        site_photo = st.file_uploader("Upload Site Inspection Photos", type=["jpg", "png", "jpeg"])
+        doc_upload = st.file_uploader("Upload Technical Documents (PDF)", type=["pdf"])
+        
+        if st.form_submit_button("Submit Progress & Documents"):
+            execute_sql("UPDATE projects SET percentage_complete = ? WHERE project_code = ?", (new_prog, p_sel))
+            log_audit_action(user_name, user_role, "Progress Update", p_sel, f"Updated completion to {new_prog}%")
+            st.success("Project progress and documentation successfully submitted!")
+            st.rerun()
+
+
+# ==========================================
+# WORKSPACE 4: FINANCE & TREASURY WORKSPACE
+# ==========================================
+elif "Finance & Treasury Workspace" in nav_choice:
+    st.title(f"Treasury Dashboard: {user_name}")
+    st.caption("County Financial Allocation, Invoices & Payments")
+
+    invoices_df = fetch_df("SELECT * FROM financial_invoices")
+    df_projects = fetch_df("SELECT * FROM projects")
+
+    m1, m2, m3 = st.columns(3)
+    with m1:
+        st.markdown(f'<div class="dec-card"><div class="dec-title">Total Allocated Budget</div><div class="dec-value">{format_currency_short(df_projects["budget_allocated"].sum())}</div></div>', unsafe_allow_html=True)
+    with m2:
+        st.markdown(f'<div class="dec-card"><div class="dec-title">Total Actual Spend</div><div class="dec-value">{format_currency_short(df_projects["actual_spend"].sum())}</div></div>', unsafe_allow_html=True)
+    with m3:
+        st.markdown(f'<div class="dec-card"><div class="dec-title">Pending Invoices</div><div class="dec-value">{len(invoices_df[invoices_df["status"]=="Pending Verification"]) }</div></div>', unsafe_allow_html=True)
+
+    st.divider()
+    st.subheader("💳 Invoices & Payments Processing")
+    st.dataframe(invoices_df, use_container_width=True)
+
+    with st.form("disburse_form"):
+        inv_id = st.number_input("Invoice ID to Disburse", min_value=1, step=1)
+        if st.form_submit_button("Authorize Financial Disbursement"):
+            execute_sql("UPDATE financial_invoices SET status = 'Disbursed' WHERE invoice_id = ?", (inv_id,))
+            log_audit_action(user_name, user_role, "Financial Disbursement", f"Invoice ID {inv_id}", "Disbursed funds successfully")
+            st.success(f"Invoice #{inv_id} marked as Disbursed.")
+            st.rerun()
+
+
+# ==========================================
+# SHARED MODULES (Approvals, Pipeline, Risk, Documents, Audit)
 # ==========================================
 elif nav_choice == "✍️ Executive Approval Centre":
     st.title("✍️ Executive Approval Centre")
     st.caption("Cryptographic & Immutable Sign-Off Interface")
 
     pending_df = fetch_df("SELECT * FROM executive_approvals WHERE status = 'Pending'")
-    
     if pending_df.empty:
         st.success("🎉 All executive approval queues are completely clear!")
     else:
@@ -484,18 +644,9 @@ elif nav_choice == "✍️ Executive Approval Centre":
                     st.rerun()
 
 
-# ==========================================
-# MODULE 3: PROJECTS LIFECYCLE PIPELINE
-# ==========================================
 elif nav_choice == "📁 Projects Lifecycle Pipeline":
     st.title("📁 Workflow-Driven Project Lifecycle Engine")
-
-    stages = [
-        "1. Idea / Proposal", "2. Technical Review", "3. Budget Approval", 
-        "4. Procurement", "5. Contract Award", "6. Construction", 
-        "7. Inspection", "8. Handover / Asset", "9. Archived"
-    ]
-
+    stages = ["1. Idea / Proposal", "2. Technical Review", "3. Budget Approval", "4. Procurement", "5. Contract Award", "6. Construction", "7. Inspection", "8. Handover / Asset", "9. Archived"]
     p_df = fetch_df("SELECT * FROM projects")
     st.dataframe(p_df[["project_code", "project_name", "sub_county", "department", "budget_allocated", "actual_spend", "percentage_complete", "lifecycle_stage", "status"]], use_container_width=True)
 
@@ -504,7 +655,6 @@ elif nav_choice == "📁 Projects Lifecycle Pipeline":
         sel_prj = st.selectbox("Select Project", p_df["project_code"].unique())
         sel_stage = st.selectbox("Advance Stage To", stages)
         notes = st.text_area("Stage Transition Governance Notes")
-
         if st.form_submit_button("Submit Lifecycle Transition"):
             execute_sql("UPDATE projects SET lifecycle_stage = ? WHERE project_code = ?", (sel_stage, sel_prj))
             log_audit_action(st.session_state["username"], user_role, "Lifecycle Advance", sel_prj, f"Advanced to {sel_stage}. Notes: {notes}")
@@ -512,12 +662,8 @@ elif nav_choice == "📁 Projects Lifecycle Pipeline":
             st.rerun()
 
 
-# ==========================================
-# MODULE 4: DEPARTMENT PERFORMANCE
-# ==========================================
 elif nav_choice == "📊 Department Performance":
     st.title("📊 Departmental Comparative Analytics")
-    
     df_p = fetch_df("SELECT * FROM projects")
     dept_agg = df_p.groupby("department").agg(
         Total_Budget=('budget_allocated', 'sum'),
@@ -525,153 +671,49 @@ elif nav_choice == "📊 Department Performance":
         Avg_Completion=('percentage_complete', 'mean'),
         Project_Count=('project_id', 'count')
     ).reset_index()
-
     dept_agg["Budget Utilization %"] = (dept_agg["Total_Spend"] / dept_agg["Total_Budget"] * 100).round(1)
     st.dataframe(dept_agg, use_container_width=True)
 
-    f1, f2 = st.columns(2)
-    with f1:
-        fig1 = px.pie(dept_agg, names="department", values="Total_Budget", title="Budget Distribution across Departments")
-        st.plotly_chart(fig1, use_container_width=True)
-    with f2:
-        fig2 = px.bar(dept_agg, x="department", y="Avg_Completion", title="Average Completion Rate (%)", color="Avg_Completion", color_continuous_scale="Greens")
-        st.plotly_chart(fig2, use_container_width=True)
 
-
-# ==========================================
-# MODULE 5: RISK & GOVERNANCE REGISTER
-# ==========================================
 elif nav_choice == "⚠️ Risk & Governance Register":
     st.title("⚠️ County Infrastructure Risk Register")
-
     r_df = fetch_df("SELECT * FROM risk_register")
     st.dataframe(r_df, use_container_width=True)
 
-    st.markdown("### ➕ Register New Project Risk")
-    with st.form("new_risk_form"):
-        prjs = fetch_df("SELECT project_code FROM projects")["project_code"].unique()
-        rk_p = st.selectbox("Project", prjs)
-        rk_desc = st.text_input("Risk Description")
-        rk_sev = st.selectbox("Severity", ["Low", "Medium", "High", "Critical"])
-        rk_mit = st.text_area("Mitigation Strategy")
-        rk_own = st.text_input("Risk Owner", user_name)
 
-        if st.form_submit_button("Log Risk Entry"):
-            execute_sql("INSERT INTO risk_register (project_code, risk_description, severity, mitigation_strategy, risk_owner) VALUES (?, ?, ?, ?, ?)",
-                        (rk_p, rk_desc, rk_sev, rk_mit, rk_own))
-            log_audit_action(st.session_state["username"], user_role, "Risk Logged", rk_p, f"Logged {rk_sev} risk")
-            st.success("Risk recorded in governance matrix!")
-            st.rerun()
-
-
-# ==========================================
-# MODULE 6: CLASSIFIED RECORDS & DOCUMENTS
-# ==========================================
 elif nav_choice == "📄 Classified Records & Documents":
     st.title("📄 Classified Records & Document Security Engine")
-
-    if user_role in ["CECM", "Chief Officer"]:
-        allowed_class = ["PUBLIC", "INTERNAL", "CONFIDENTIAL", "RESTRICTED"]
-    elif user_role == "Director":
-        allowed_class = ["PUBLIC", "INTERNAL", "CONFIDENTIAL"]
-    else:
-        allowed_class = ["PUBLIC", "INTERNAL"]
-
-    st.info(f"🔒 Your Role (`{user_role}`) grants access to document security levels up to: **{', '.join(allowed_class)}**")
-
+    allowed_class = ["PUBLIC", "INTERNAL", "CONFIDENTIAL", "RESTRICTED"] if user_role in ["CECM", "Chief Officer"] else ["PUBLIC", "INTERNAL"]
     docs_df = fetch_df("SELECT * FROM classified_documents WHERE security_classification IN ({})".format(','.join('?' for _ in allowed_class)), allowed_class)
     st.dataframe(docs_df, use_container_width=True)
 
-    st.markdown("### 📤 Upload Classified Document")
-    with st.form("upload_doc_sec"):
-        p_code_d = st.selectbox("Project Code", fetch_df("SELECT project_code FROM projects")["project_code"].unique())
-        doc_n = st.text_input("Document Name")
-        doc_class = st.selectbox("Security Classification Level", ["PUBLIC", "INTERNAL", "CONFIDENTIAL", "RESTRICTED"])
-        retention = st.number_input("Retention Period (Years)", min_value=1, value=7)
-        
-        if st.form_submit_button("Store in Classified Repository"):
-            execute_sql("INSERT INTO classified_documents (project_code, doc_name, security_classification, uploaded_by, retention_period_yrs, upload_date) VALUES (?, ?, ?, ?, ?, ?)",
-                        (p_code_d, doc_n, doc_class, user_name, retention, datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
-            log_audit_action(st.session_state["username"], user_role, "Document Upload", p_code_d, f"Uploaded {doc_n} [{doc_class}]")
-            st.success("Document stored securely!")
-            st.rerun()
 
-
-# ==========================================
-# MODULE 7: SITE INSPECTION MODULE
-# ==========================================
 elif nav_choice == "🏗️ Site Inspection Module":
     st.title("🏗️ Field Site Inspection & Defect Logger")
-
     insp_df = fetch_df("SELECT * FROM site_inspections")
     st.dataframe(insp_df, use_container_width=True)
 
-    st.markdown("### 📝 Log Technical Field Inspection")
-    with st.form("site_insp_form"):
-        i_pcode = st.selectbox("Project Code", fetch_df("SELECT project_code FROM projects")["project_code"].unique())
-        i_gps = st.text_input("GPS Coordinates (Lat, Long)", "-0.42013, 36.94759")
-        i_weather = st.selectbox("Weather Conditions", ["Sunny / Dry", "Rainy / Muddy", "Overcast"])
-        i_defects = st.text_area("Defects / Non-Compliance Observed")
-        i_recom = st.text_area("Engineering Recommendations")
-        i_next = st.date_input("Next Scheduled Inspection")
 
-        if st.form_submit_button("Submit Official Inspection Log"):
-            execute_sql("INSERT INTO site_inspections (project_code, engineer_name, inspection_date, gps_coordinates, weather, defects_found, recommendations, next_inspection_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                        (i_pcode, user_name, datetime.date.today().strftime("%Y-%m-%d"), i_gps, i_weather, i_defects, i_recom, i_next.strftime("%Y-%m-%d")))
-            log_audit_action(st.session_state["username"], user_role, "Site Inspection", i_pcode, "Field inspection log created")
-            st.success("Inspection logged into permanent audit record!")
-            st.rerun()
-
-
-# ==========================================
-# MODULE 8: COUNTY ASSET REGISTER
-# ==========================================
-elif nav_choice == "🏛️ County Asset Register":
-    st.title("🏛️ Completed Public Asset Register")
-    st.caption("Post-Completion Capital Asset Tracking & Condition Maintenance")
-
-    assets_df = fetch_df("SELECT * FROM asset_register")
-    st.dataframe(assets_df, use_container_width=True)
-
-
-# ==========================================
-# MODULE 9: AI EXECUTIVE BRIEFING
-# ==========================================
 elif nav_choice == "🤖 AI Executive Briefing":
     st.title("🤖 Daily Executive Operational AI Briefing")
-
-    today_str = datetime.date.today().strftime("%d %B %Y")
-    st.markdown(f"""
+    st.markdown("""
     <div style="background-color: #F3F4F6; padding: 20px; border-radius: 8px; border-left: 6px solid #0A4D20;">
-        <h3>📰 Executive Briefing – {today_str}</h3>
+        <h3>📰 Executive Briefing Summary</h3>
         <p><strong>To:</strong> CECM & Chief Officer | <strong>Generated by:</strong> Nyeri MIS Decision Engine</p>
         <hr/>
         <ul>
-            <li><strong>Immediate Approvals:</strong> There are <strong>2 pending executive sign-offs</strong> awaiting authorization in the Executive Approval Centre.</li>
-            <li><strong>Project Health:</strong> <strong>Mukurwe-ini Feeder Roads Tarmacking</strong> is currently marked as 🔴 <em>Delayed</em> with an expenditure rate of 95.1% of allocated capital.</li>
-            <li><strong>Departmental Leader:</strong> <strong>Roads & Transport</strong> leads infrastructure spend, while <strong>Water & Sanitation</strong> has achieved the highest average completion rate.</li>
-            <li><strong>Risk Summary:</strong> 1 critical risk flagged regarding soil instability in Mukurwe-ini.</li>
+            <li><strong>Immediate Approvals:</strong> Pending executive sign-offs awaiting authorization in the Executive Approval Centre.</li>
+            <li><strong>Project Health:</strong> Mukurwe-ini Feeder Roads is currently marked as 🔴 <em>Delayed</em>.</li>
+            <li><strong>Risk Summary:</strong> Soil instability risk actively monitored in Mukurwe-ini sub-county.</li>
         </ul>
     </div>
     """, unsafe_allow_html=True)
 
 
-# ==========================================
-# MODULE 10: DISASTER RECOVERY & AUDIT LOGS
-# ==========================================
 elif nav_choice == "⚙️ Disaster Recovery & Audit Logs":
     st.title("⚙️ System Health, Disaster Recovery & Audit Logs")
-
-    st.subheader("🛡️ Administrative Disaster Recovery")
-    d1, d2 = st.columns(2)
-    with d1:
-        if st.button("💾 Trigger Database Backup Now", type="primary"):
-            st.success("Database backup `nyeri_mis_backup_2026.db` generated and verified successfully!")
-    with d2:
-        if st.button("🔍 Verify System & Database Integrity"):
-            st.info("Integrity Check Passed: All database tables consistent.")
-
-    st.divider()
+    if st.button("💾 Trigger Database Backup Now", type="primary"):
+        st.success("Database backup generated successfully!")
     st.subheader("📜 Comprehensive System Audit Trail")
     logs = fetch_df("SELECT * FROM audit_logs ORDER BY log_id DESC LIMIT 50")
     st.dataframe(logs, use_container_width=True)
