@@ -6,12 +6,13 @@ import textwrap
 import numpy as np
 import pandas as pd
 import plotly.express as px
+import plotly.graph_objects as go
 import streamlit as st
 
 
 # --- 1. ENTERPRISE DATABASE & AUDIT HELPERS ---
 def init_enterprise_db():
-    """Initializes the database with tables for projects, documents, workflows, and audits, and seeds sample data."""
+    """Initializes database tables and upgrades schema if required."""
     try:
         conn = sqlite3.connect("nyeri_public_works.db")
         cursor = conn.cursor()
@@ -27,9 +28,7 @@ def init_enterprise_db():
             )
         ''')
 
-        # Insert default administrative accounts if empty
-        cursor.execute("SELECT COUNT(*) FROM users")
-        if cursor.fetchone()[0] == 0:
+        if cursor.execute("SELECT COUNT(*) FROM users").fetchone()[0] == 0:
             cursor.execute("INSERT INTO users (username, password, full_name, role) VALUES ('admin', 'admin123', 'System Administrator', 'Admin')")
             cursor.execute("INSERT INTO users (username, password, full_name, role) VALUES ('engineer', 'eng123', 'Lead Engineer', 'Engineer')")
             cursor.execute("INSERT INTO users (username, password, full_name, role) VALUES ('director', 'dir123', 'Public Works Director', 'Director')")
@@ -43,6 +42,7 @@ def init_enterprise_db():
                 project_name TEXT NOT NULL,
                 sub_county TEXT,
                 department TEXT,
+                contractor TEXT DEFAULT 'County In-House',
                 budget_allocated REAL,
                 actual_spend REAL DEFAULT 0.0,
                 percentage_complete INTEGER DEFAULT 0,
@@ -53,24 +53,30 @@ def init_enterprise_db():
             )
         ''')
 
-        # Seed sample Nyeri County projects if table is empty
-        cursor.execute("SELECT COUNT(*) FROM projects")
-        if cursor.fetchone()[0] == 0:
+        # Upgrade existing database schema gracefully if contractor column is missing
+        try:
+            cursor.execute("ALTER TABLE projects ADD COLUMN contractor TEXT DEFAULT 'County In-House'")
+        except sqlite3.OperationalError:
+            pass
+
+        # Seed initial sample data if empty
+        if cursor.execute("SELECT COUNT(*) FROM projects").fetchone()[0] == 0:
             sample_projects = [
-                ("PRJ-2026-001", "Karatina Market Modernization & Drainage", "Mathira East", "Infrastructure & Energy", 45000000.0, 38000000.0, 85, "In Progress", "Active", "admin", "2026-01-10 09:00:00"),
-                ("PRJ-2026-002", "Othaya Sub-County Hospital Wing Extension", "Othaya", "Public Works", 60000000.0, 60000000.0, 100, "Completed", "Completed", "director", "2026-02-14 11:30:00"),
-                ("PRJ-2026-003", "Tetu High-Altitude Training Water Pipeline", "Tetu", "Water & Sanitation", 18500000.0, 12000000.0, 65, "In Progress", "Active", "engineer", "2026-03-01 14:15:00"),
-                ("PRJ-2026-004", "Mukurwe-ini Feeder Roads Tarmacking", "Mukurweini", "Roads & Transport", 82000000.0, 25000000.0, 30, "Review", "Delayed", "engineer", "2026-03-20 10:45:00"),
-                ("PRJ-2026-005", "Nyeri Town Bus Park Stormwater System", "Nyeri Town", "Public Works", 12000000.0, 1500000.0, 15, "Draft", "Active", "admin", "2026-04-05 16:20:00"),
-                ("PRJ-2026-006", "Kieni East Earth Dam Rehabilitation", "Kieni East", "Water & Sanitation", 35000000.0, 32000000.0, 90, "Approved", "Active", "chief", "2026-05-12 08:50:00")
+                ("PRJ-2026-001", "Karatina Market Modernization & Drainage", "Mathira East", "Infrastructure & Energy", "Apex Builders Ltd", 45000000.0, 38000000.0, 85, "In Progress", "Active", "admin", "2026-07-21 09:00:00"),
+                ("PRJ-2026-002", "Othaya Sub-County Hospital Wing Extension", "Othaya", "Health Services", "Mount Kenya Construction", 60000000.0, 60000000.0, 100, "Completed", "Completed", "director", "2026-07-20 11:30:00"),
+                ("PRJ-2026-003", "Tetu High-Altitude Training Water Pipeline", "Tetu", "Water & Sanitation", "Aberdare Water Systems", 18500000.0, 12000000.0, 65, "In Progress", "Active", "engineer", "2026-07-21 14:15:00"),
+                ("PRJ-2026-004", "Mukurwe-ini Feeder Roads Tarmacking", "Mukurweini", "Roads & Transport", "Highland Civils Ltd", 82000000.0, 25000000.0, 30, "Review", "Delayed", "engineer", "2026-07-18 10:45:00"),
+                ("PRJ-2026-005", "Nyeri Town Bus Park Stormwater System", "Nyeri Town", "Public Works", "County In-House", 12000000.0, 1500000.0, 15, "Draft", "Active", "admin", "2026-07-21 10:20:00"),
+                ("PRJ-2026-006", "Kieni East Earth Dam Rehabilitation", "Kieni East", "Water & Sanitation", "Rift Valley Hydraulics", 35000000.0, 32000000.0, 90, "Approved", "Active", "chief", "2026-07-19 08:50:00"),
+                ("PRJ-2026-007", "Chinga Dam Eco-Tourism Infrastructure", "Othaya", "Public Works", "GreenPath Contractors", 22000000.0, 0.0, 0, "Draft", "Rejected", "engineer", "2026-07-15 16:00:00")
             ]
             cursor.executemany("""
                 INSERT INTO projects 
-                (project_code, project_name, sub_county, department, budget_allocated, actual_spend, percentage_complete, workflow_stage, status, created_by, last_updated)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                (project_code, project_name, sub_county, department, contractor, budget_allocated, actual_spend, percentage_complete, workflow_stage, status, created_by, last_updated)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, sample_projects)
 
-        # 3. Document Management Table
+        # 3. Documents Table
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS documents (
                 doc_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -100,7 +106,7 @@ def init_enterprise_db():
         st.error(f"Database Initialization error: {e}")
 
 def log_audit_action(username, action, target, details=""):
-    """Helper function to record actions in the audit trail."""
+    """Helper function to record actions in the audit log."""
     try:
         conn = sqlite3.connect("nyeri_public_works.db")
         cursor = conn.cursor()
@@ -115,7 +121,7 @@ def log_audit_action(username, action, target, details=""):
         print(f"Audit log failed: {e}")
 
 def verify_login(username, password):
-    """Verify user credentials against SQLite database."""
+    """Verify user credentials against database."""
     try:
         conn = sqlite3.connect("nyeri_public_works.db")
         cursor = conn.cursor()
@@ -137,7 +143,7 @@ def verify_login(username, password):
     return None
 
 def register_user(username, password, full_name, role="Viewer"):
-    """Register a new user in the SQLite database."""
+    """Register a new user account."""
     try:
         conn = sqlite3.connect("nyeri_public_works.db")
         cursor = conn.cursor()
@@ -246,7 +252,6 @@ def inject_custom_styles():
         [data-testid="stSidebar"] strong {
             color: #D4AF37 !important;
         }
-        /* Fix sidebar button text contrast */
         [data-testid="stSidebar"] button {
             background-color: #FFFFFF !important;
             border: 2px solid #D4AF37 !important;
@@ -272,7 +277,14 @@ def inject_custom_styles():
         div[data-testid="stMetricValue"] {
             color: #0A4D20 !important;
             font-weight: 700 !important;
-            font-size: 1.5rem !important;
+            font-size: 1.6rem !important;
+        }
+        .activity-card {
+            background-color: #f8f9fa;
+            border-left: 4px solid #0A4D20;
+            padding: 8px 12px;
+            margin-bottom: 8px;
+            border-radius: 4px;
         }
     </style>
     """,
@@ -310,7 +322,7 @@ if not st.session_state["authenticated"]:
 
     if st.session_state.get("show_goodbye", False):
         last_user = st.session_state.get("last_username", "User")
-        st.success(f"👋 Goodbye, **{last_user}**! You have been logged out securely. Have a great day!")
+        st.success(f"👋 Goodbye, **{last_user}**! You have been logged out securely.")
         st.session_state["show_goodbye"] = False
 
     _, auth_col, _ = st.columns([1, 1.8, 1])
@@ -404,7 +416,7 @@ st.markdown(
     f"""
     <div style="background-color: #f0f7f2; border-left: 5px solid #0A4D20; padding: 12px 20px; border-radius: 6px; margin-bottom: 20px;">
         <span style="color: #0A4D20; font-weight: 600; font-size: 18px;">☀️ {current_greeting}, {user_display}!</span>
-        <span style="color: #555555; font-size: 14px; margin-left: 10px;">| County Government of Nyeri Executive MIS Dashboard</span>
+        <span style="color: #555555; font-size: 14px; margin-left: 10px;">| Executive Dashboard & Portfolio Overview</span>
     </div>
     """,
     unsafe_allow_html=True,
@@ -421,10 +433,10 @@ def fetch_project_data():
         st.error(f"Database error: {e}")
         return pd.DataFrame()
 
-def fetch_audit_logs():
+def fetch_audit_logs(limit=30):
     try:
         conn = sqlite3.connect("nyeri_public_works.db")
-        df = pd.read_sql_query("SELECT timestamp, username, action, target_record, details FROM audit_logs ORDER BY log_id DESC LIMIT 25", conn)
+        df = pd.read_sql_query(f"SELECT timestamp, username, action, target_record, details FROM audit_logs ORDER BY log_id DESC LIMIT {limit}", conn)
         conn.close()
         return df
     except Exception:
@@ -442,7 +454,6 @@ def fetch_documents(project_code=None):
     except Exception:
         return pd.DataFrame()
 
-# Helper for budget formatting
 def format_currency_short(val):
     if val >= 1e9:
         return f"KES {val/1e9:.2f}B"
@@ -463,141 +474,293 @@ tab_dash, tab_entry, tab_docs, tab_audit = st.tabs([
 
 df = fetch_project_data()
 
-# TAB 1: EXECUTIVE DASHBOARD
+# ==========================================
+# TAB 1: EXECUTIVE DASHBOARD (EXPANDED)
+# ==========================================
 with tab_dash:
     if not df.empty:
-        st.sidebar.header("📊 Filter Projects")
+        # Sidebar Filters
+        st.sidebar.header("📊 Filter Dashboard")
 
-        dept_col = next((c for c in df.columns if c.lower() in ["department_assigned", "department", "dept", "dept_name"]), None)
-        status_col = next((c for c in df.columns if c.lower() in ["workflow_stage", "current_status", "status", "stage"]), None)
-        budget_col = next((c for c in df.columns if c.lower() in ["budget_allocated", "budget", "cost"]), None)
-        name_col = next((c for c in df.columns if c.lower() in ["project_name", "name", "title"]), df.columns[0])
-        subcounty_col = next((c for c in df.columns if c.lower() in ["sub_county", "subcounty", "ward"]), None)
+        dept_col = next((c for c in df.columns if c.lower() in ["department", "dept", "department_assigned"]), None)
+        status_col = next((c for c in df.columns if c.lower() in ["status", "current_status"]), None)
+        contractor_col = next((c for c in df.columns if c.lower() in ["contractor", "contractor_assigned"]), None)
+        subcounty_col = next((c for c in df.columns if c.lower() in ["sub_county", "subcounty"]), None)
+        name_col = next((c for c in df.columns if c.lower() in ["project_name", "name"]), df.columns[0])
 
         filtered_df = df.copy()
 
         if dept_col:
-            departments = ["All"] + list(filtered_df[dept_col].dropna().unique())
-            selected_dept = st.sidebar.selectbox("Filter by Department", departments)
+            departments = ["All"] + sorted(list(filtered_df[dept_col].dropna().unique()))
+            selected_dept = st.sidebar.selectbox("Department", departments)
             if selected_dept != "All":
                 filtered_df = filtered_df[filtered_df[dept_col] == selected_dept]
 
         if status_col:
-            statuses = ["All"] + list(filtered_df[status_col].dropna().unique())
-            selected_status = st.sidebar.selectbox("Filter by Stage", statuses)
+            statuses = ["All"] + sorted(list(filtered_df[status_col].dropna().unique()))
+            selected_status = st.sidebar.selectbox("Status", statuses)
             if selected_status != "All":
                 filtered_df = filtered_df[filtered_df[status_col] == selected_status]
 
-        # KPI Metrics
-        st.subheader(f"Executive Summary ({len(filtered_df)} Projects Displayed)")
-        kpi1, kpi2, kpi3, kpi4 = st.columns(4)
+        if contractor_col:
+            contractors = ["All"] + sorted(list(filtered_df[contractor_col].dropna().unique()))
+            selected_contractor = st.sidebar.selectbox("Contractor", contractors)
+            if selected_contractor != "All":
+                filtered_df = filtered_df[filtered_df[contractor_col] == selected_contractor]
 
-        total_proj = len(filtered_df)
-        completed_proj = 0
-        ongoing_proj = 0
+        # ----------------------------------------------------
+        # 1. EXPANDED KPI CARDS (6 METRICS)
+        # ----------------------------------------------------
+        st.subheader(f"📈 Executive Overview ({len(filtered_df)} Projects)")
 
-        if status_col:
-            completed_proj = len(filtered_df[filtered_df[status_col].astype(str).str.lower().str.contains("complete|done|finished", na=False)])
-            ongoing_proj = total_proj - completed_proj
+        # Metric Calculations
+        total_projects = len(filtered_df)
+        active_projects = len(filtered_df[filtered_df[status_col].astype(str).str.lower() == 'active']) if status_col else 0
+        completed_projects = len(filtered_df[filtered_df[status_col].astype(str).str.lower().str.contains('complete', na=False)]) if status_col else 0
+        delayed_projects = len(filtered_df[filtered_df[status_col].astype(str).str.lower() == 'delayed']) if status_col else 0
+        rejected_projects = len(filtered_df[filtered_df[status_col].astype(str).str.lower() == 'rejected']) if status_col else 0
 
-        total_budget = 0.0
-        if budget_col:
-            total_budget = pd.to_numeric(filtered_df[budget_col], errors="coerce").sum()
+        total_budget = pd.to_numeric(filtered_df["budget_allocated"], errors="coerce").sum()
+        total_spend = pd.to_numeric(filtered_df["actual_spend"], errors="coerce").sum()
+        budget_utilization_pct = (total_spend / total_budget * 100) if total_budget > 0 else 0.0
 
-        kpi1.metric("Total Projects", total_proj)
-        kpi2.metric("Active / Ongoing", ongoing_proj)
-        kpi3.metric("Completed Projects", completed_proj)
-        kpi4.metric("Total Budget Allocated", format_currency_short(total_budget), help=f"Exact Budget: KES {total_budget:,.2f}")
+        # KPI Layout - 2 Rows of 3 Cards
+        m_row1_col1, m_row1_col2, m_row1_col3 = st.columns(3)
+        with m_row1_col1:
+            st.metric("Total Projects", total_projects, help="Total projects in current filtered view")
+        with m_row1_col2:
+            st.metric("Active Projects", active_projects, delta=f"{active_projects/total_projects*100:.0f}% of total" if total_projects else "0%")
+        with m_row1_col3:
+            st.metric("Completed Projects", completed_projects, delta_color="normal", delta=f"{completed_projects/total_projects*100:.0f}% finished" if total_projects else "0%")
 
-        # Charts Section
-        col_left, col_right = st.columns(2)
+        m_row2_col1, m_row2_col2, m_row2_col3 = st.columns(3)
+        with m_row2_col1:
+            st.metric("Delayed Projects", delayed_projects, delta=f"-{delayed_projects}" if delayed_projects > 0 else "0", delta_color="inverse")
+        with m_row2_col2:
+            st.metric("Rejected Projects", rejected_projects, delta=f"-{rejected_projects}" if rejected_projects > 0 else "0", delta_color="inverse")
+        with m_row2_col3:
+            st.metric(
+                "Budget Utilization %", 
+                f"{budget_utilization_pct:.1f}%", 
+                delta=f"{format_currency_short(total_spend)} / {format_currency_short(total_budget)}",
+                help="Actual Spend divided by Allocated Budget"
+            )
 
-        with col_left:
+        st.markdown("---")
+
+        # ----------------------------------------------------
+        # 2. NOTIFICATIONS & ALERTS SECTION
+        # ----------------------------------------------------
+        st.subheader("🔔 System Notifications & Alerts")
+        
+        notif_col1, notif_col2 = st.columns(2)
+        with notif_col1:
+            if delayed_projects > 0:
+                delayed_list = filtered_df[filtered_df[status_col].astype(str).str.lower() == 'delayed'][name_col].tolist()
+                st.warning(f"⚠️ **{delayed_projects} Project(s) Currently Delayed:**\n" + "\n".join([f"- {p}" for p in delayed_list]))
+            else:
+                st.success("✅ **No Schedule Delays:** All active projects are running on schedule.")
+
+            if rejected_projects > 0:
+                rejected_list = filtered_df[filtered_df[status_col].astype(str).str.lower() == 'rejected'][name_col].tolist()
+                st.error(f"❌ **{rejected_projects} Project Proposal(s) Rejected:**\n" + "\n".join([f"- {p}" for p in rejected_list]))
+
+        with notif_col2:
+            # Check for high budget usage projects (>90% utilization)
+            high_spend = filtered_df[(filtered_df["actual_spend"] / filtered_df["budget_allocated"] >= 0.90) & (filtered_df["percentage_complete"] < 100)]
+            if not high_spend.empty:
+                high_spend_names = high_spend[name_col].tolist()
+                st.info(f"💡 **High Budget Utilization Alert (>90% Spent, Incomplete):**\n" + "\n".join([f"- {p}" for p in high_spend_names]))
+            else:
+                st.info("ℹ️ **Budget Check:** No budget overruns or elevated risk thresholds detected.")
+
+            # Pending Approvals
+            pending_review = len(filtered_df[filtered_df["workflow_stage"].isin(["Draft", "Review"])])
+            if pending_review > 0:
+                st.warning(f"📋 **{pending_review} Project(s) Pending Approval:** Currently in Draft or Review stage.")
+
+        st.markdown("---")
+
+        # ----------------------------------------------------
+        # 3. DEPARTMENT & CONTRACTOR PERFORMANCE
+        # ----------------------------------------------------
+        col_perf1, col_perf2 = st.columns(2)
+
+        with col_perf1:
+            st.subheader("🏢 Department Performance")
             if dept_col:
-                dept_counts = filtered_df[dept_col].value_counts().reset_index()
-                dept_counts.columns = ["Department", "Count"]
+                dept_perf = filtered_df.groupby(dept_col).agg(
+                    Total_Budget=('budget_allocated', 'sum'),
+                    Total_Spend=('actual_spend', 'sum'),
+                    Avg_Completion=('percentage_complete', 'mean'),
+                    Project_Count=('project_code', 'count')
+                ).reset_index()
 
-                fig_dept = px.bar(
-                    dept_counts,
-                    x="Department",
-                    y="Count",
-                    color="Department",
-                    title="Projects by Department",
-                    color_discrete_sequence=px.colors.qualitative.Bold,
+                fig_dept_perf = go.Figure()
+                fig_dept_perf.add_trace(go.Bar(
+                    x=dept_perf[dept_col], y=dept_perf['Total_Budget']/1e6,
+                    name='Allocated (KES M)', marker_color='#0A4D20'
+                ))
+                fig_dept_perf.add_trace(go.Bar(
+                    x=dept_perf[dept_col], y=dept_perf['Total_Spend']/1e6,
+                    name='Actual Spend (KES M)', marker_color='#D4AF37'
+                ))
+                fig_dept_perf.update_layout(
+                    barmode='group',
+                    title="Budget Allocation vs. Spend by Department",
+                    xaxis_title="Department",
+                    yaxis_title="Amount (KES Millions)",
+                    legend=dict(orient="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+                    margin=dict(t=40, b=20)
                 )
-                fig_dept.update_layout(xaxis_tickangle=-30, showlegend=False, margin=dict(t=30, b=20))
-                st.plotly_chart(fig_dept, use_container_width=True)
+                st.plotly_chart(fig_dept_perf, use_container_width=True)
 
-        with col_right:
-            if status_col:
-                status_color_map = {
-                    "Completed": "#2e7d32",
-                    "Approved": "#4caf50",
-                    "In Progress": "#0288d1",
-                    "Review": "#f57c00",
-                    "Draft": "#9e9e9e",
-                    "Delayed": "#d32f2f",
-                }
-                fig_status = px.pie(
-                    filtered_df,
-                    names=status_col,
-                    hole=0.4,
-                    title="Project Stage Breakdown",
-                    color=status_col,
-                    color_discrete_map=status_color_map,
+                # Department Progress Table / Spark summary
+                st.dataframe(
+                    dept_perf.rename(columns={
+                        dept_col: "Department",
+                        "Total_Budget": "Allocated (KES)",
+                        "Total_Spend": "Spend (KES)",
+                        "Avg_Completion": "Avg Completion %",
+                        "Project_Count": "Projects"
+                    }),
+                    column_config={
+                        "Allocated (KES)": st.column_config.NumberColumn(format="KES %,.0f"),
+                        "Spend (KES)": st.column_config.NumberColumn(format="KES %,.0f"),
+                        "Avg Completion %": st.column_config.ProgressColumn(format="%.1f%%", min_value=0, max_value=100)
+                    },
+                    use_container_width=True,
+                    hide_index=True
                 )
-                fig_status.update_layout(margin=dict(t=30, b=20))
-                st.plotly_chart(fig_status, use_container_width=True)
 
-        # GIS Interactive Nyeri Map
-        st.subheader("🗺️ Nyeri County Project GIS Map")
+        with col_perf2:
+            st.subheader("🏗️ Contractor Performance")
+            if contractor_col and contractor_col in filtered_df.columns:
+                contractor_perf = filtered_df.groupby(contractor_col).agg(
+                    Avg_Completion=('percentage_complete', 'mean'),
+                    Total_Projects=('project_code', 'count'),
+                    Total_Budget=('budget_allocated', 'sum')
+                ).reset_index()
 
-        NYERI_COORDINATES = {
-            "mathira east": (-0.4812, 37.1281), "mathira west": (-0.4285, 37.0600),
-            "othaya": (-0.5439, 36.9472), "mukurweini": (-0.5606, 37.0483),
-            "tetu": (-0.4350, 36.8833), "nyeri town": (-0.4201, 36.9476),
-            "kieni east": (-0.1500, 37.0500), "kieni west": (-0.2800, 36.8500),
-        }
+                fig_contractor = px.bar(
+                    contractor_perf,
+                    x="Avg_Completion",
+                    y=contractor_col,
+                    orientation='h',
+                    color="Avg_Completion",
+                    color_continuous_scale="Blugrn",
+                    title="Average Progress % by Contractor",
+                    labels={"Avg_Completion": "Average Completion (%)", contractor_col: "Contractor / Entity"}
+                )
+                fig_contractor.update_layout(margin=dict(t=40, b=20), coloraxis_showscale=False)
+                st.plotly_chart(fig_contractor, use_container_width=True)
 
-        def assign_coordinates(row):
-            loc_str = ""
-            if subcounty_col and row.get(subcounty_col): loc_str += str(row.get(subcounty_col)).lower()
-            if name_col and row.get(name_col): loc_str += " " + str(row.get(name_col)).lower()
+                st.dataframe(
+                    contractor_perf.rename(columns={
+                        contractor_col: "Contractor",
+                        "Avg_Completion": "Avg Progress %",
+                        "Total_Projects": "Active Contracts",
+                        "Total_Budget": "Contract Value (KES)"
+                    }),
+                    column_config={
+                        "Contract Value (KES)": st.column_config.NumberColumn(format="KES %,.0f"),
+                        "Avg Progress %": st.column_config.ProgressColumn(format="%.1f%%", min_value=0, max_value=100)
+                    },
+                    use_container_width=True,
+                    hide_index=True
+                )
 
-            for key, coords in NYERI_COORDINATES.items():
-                if key in loc_str: return coords
-            return (-0.4201, 36.9476) 
+        st.markdown("---")
 
-        map_df = filtered_df.copy()
-        coords = map_df.apply(assign_coordinates, axis=1)
-        map_df["latitude"] = [c[0] for c in coords]
-        map_df["longitude"] = [c[1] for c in coords]
+        # ----------------------------------------------------
+        # 4. GIS MAP & TODAY'S ACTIVITIES
+        # ----------------------------------------------------
+        col_map, col_act = st.columns([1.8, 1.2])
 
-        np.random.seed(42)
-        map_df["latitude"] += np.random.uniform(-0.008, 0.008, size=len(map_df))
-        map_df["longitude"] += np.random.uniform(-0.008, 0.008, size=len(map_df))
+        with col_map:
+            st.subheader("🗺️ Nyeri County Project GIS Map")
 
-        hover_cols = {c: True for c in [dept_col, status_col] if c}
-        if budget_col: hover_cols[budget_col] = ":,.2f"
-        hover_cols["latitude"] = False
-        hover_cols["longitude"] = False
+            NYERI_COORDINATES = {
+                "mathira east": (-0.4812, 37.1281), "mathira west": (-0.4285, 37.0600),
+                "othaya": (-0.5439, 36.9472), "mukurweini": (-0.5606, 37.0483),
+                "tetu": (-0.4350, 36.8833), "nyeri town": (-0.4201, 36.9476),
+                "kieni east": (-0.1500, 37.0500), "kieni west": (-0.2800, 36.8500),
+            }
 
-        fig_map = px.scatter_mapbox(
-            map_df, lat="latitude", lon="longitude", hover_name=name_col,
-            hover_data=hover_cols, color=status_col if status_col else None,
-            zoom=9.5, center={"lat": -0.4201, "lon": 36.9476}, height=450,
-        )
-        fig_map.update_layout(mapbox_style="open-street-map", margin={"r": 0, "t": 10, "l": 0, "b": 10})
-        st.plotly_chart(fig_map, use_container_width=True)
+            def assign_coordinates(row):
+                loc_str = ""
+                if subcounty_col and row.get(subcounty_col): loc_str += str(row.get(subcounty_col)).lower()
+                if name_col and row.get(name_col): loc_str += " " + str(row.get(name_col)).lower()
 
-        # Full Table with Streamlit Progress Column
-        st.subheader("📋 Project Details Table")
+                for key, coords in NYERI_COORDINATES.items():
+                    if key in loc_str: return coords
+                return (-0.4201, 36.9476) 
+
+            map_df = filtered_df.copy()
+            coords = map_df.apply(assign_coordinates, axis=1)
+            map_df["latitude"] = [c[0] for c in coords]
+            map_df["longitude"] = [c[1] for c in coords]
+
+            np.random.seed(42)
+            map_df["latitude"] += np.random.uniform(-0.008, 0.008, size=len(map_df))
+            map_df["longitude"] += np.random.uniform(-0.008, 0.008, size=len(map_df))
+
+            hover_cols = {c: True for c in [dept_col, status_col, contractor_col] if c}
+            hover_cols["latitude"] = False
+            hover_cols["longitude"] = False
+
+            fig_map = px.scatter_mapbox(
+                map_df, lat="latitude", lon="longitude", hover_name=name_col,
+                hover_data=hover_cols, color=status_col if status_col else None,
+                zoom=9.2, center={"lat": -0.4201, "lon": 36.9476}, height=450,
+            )
+            fig_map.update_layout(mapbox_style="open-street-map", margin={"r": 0, "t": 10, "l": 0, "b": 10})
+            st.plotly_chart(fig_map, use_container_width=True)
+
+        with col_act:
+            st.subheader("⚡ Today's Activities Feed")
+            
+            today_str = datetime.datetime.now().strftime("%Y-%m-%d")
+            logs_df = fetch_audit_logs(limit=25)
+
+            if not logs_df.empty:
+                # Filter for today's logs
+                today_logs = logs_df[logs_df["timestamp"].astype(str).str.startswith(today_str)]
+                
+                display_logs = today_logs if not today_logs.empty else logs_df.head(6)
+
+                if today_logs.empty:
+                    st.caption(f"Showing recent activity (No events logged yet for {today_str}):")
+                else:
+                    st.caption(f"Activities logged today ({today_str}):")
+
+                for _, log in display_logs.iterrows():
+                    time_part = str(log['timestamp']).split(" ")[-1] if " " in str(log['timestamp']) else log['timestamp']
+                    st.markdown(
+                        f"""
+                        <div class="activity-card">
+                            <span style="color: #0A4D20; font-weight: bold;">[{time_part}] {log['action']}</span> 
+                            <span style="color: #666;">by <strong>{log['username']}</strong></span><br/>
+                            <span style="font-size: 13px; color: #333;">Target: <code>{log['target_record']}</code> | {log['details']}</span>
+                        </div>
+                        """,
+                        unsafe_allow_html=True
+                    )
+            else:
+                st.info("No system activity recorded yet today.")
+
+        st.markdown("---")
+
+        # ----------------------------------------------------
+        # 5. DETAILED PROJECT REGISTRY TABLE
+        # ----------------------------------------------------
+        st.subheader("📋 Master Project Registry")
         st.dataframe(
             filtered_df,
             column_config={
                 "percentage_complete": st.column_config.ProgressColumn(
-                    "Completion %",
-                    help="Project progress percentage",
+                    "Progress %",
+                    help="Project completion percentage",
                     format="%d%%",
                     min_value=0,
                     max_value=100,
@@ -612,7 +775,10 @@ with tab_dash:
     else:
         st.warning("No project data found. Navigate to the **Project Management** tab to enter your first project.")
 
+
+# ==========================================
 # TAB 2: PROJECT MANAGEMENT & ENTRY
+# ==========================================
 with tab_entry:
     st.subheader("🛠️ Project Data Management")
     
@@ -627,13 +793,14 @@ with tab_entry:
                 p_name = st.text_input("Project Name (e.g., Othaya Road Resurfacing)")
                 p_subcounty = st.selectbox("Sub-County", ["Nyeri Town", "Othaya", "Tetu", "Mukurweini", "Mathira East", "Mathira West", "Kieni East", "Kieni West"])
                 p_dept = st.selectbox("Department", ["Roads & Transport", "Public Works", "Water & Sanitation", "Infrastructure & Energy", "Health Services"])
-                p_budget = st.number_input("Allocated Budget (KES)", min_value=0.0, step=500000.0, value=5000000.0)
+                p_contractor = st.text_input("Contractor / Implementing Agency", value="County In-House")
 
             with col_p2:
+                p_budget = st.number_input("Allocated Budget (KES)", min_value=0.0, step=500000.0, value=5000000.0)
                 p_spend = st.number_input("Actual Spend to Date (KES)", min_value=0.0, step=100000.0, value=0.0)
                 p_complete = st.slider("Completion Percentage (%)", min_value=0, max_value=100, value=0)
                 p_stage = st.selectbox("Workflow Stage", ["Draft", "Review", "Approved", "In Progress", "Completed"])
-                p_status = st.selectbox("Current Status", ["Active", "Delayed", "Completed", "On Hold"])
+                p_status = st.selectbox("Current Status", ["Active", "Delayed", "Completed", "On Hold", "Rejected"])
 
             btn_save = st.form_submit_button("💾 Save New Project Record", use_container_width=True)
 
@@ -647,9 +814,9 @@ with tab_entry:
                         now_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                         cursor.execute("""
                             INSERT INTO projects 
-                            (project_code, project_name, sub_county, department, budget_allocated, actual_spend, percentage_complete, workflow_stage, status, created_by, last_updated)
-                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                        """, (p_code, p_name, p_subcounty, p_dept, p_budget, p_spend, p_complete, p_stage, p_status, st.session_state["username"], now_str))
+                            (project_code, project_name, sub_county, department, contractor, budget_allocated, actual_spend, percentage_complete, workflow_stage, status, created_by, last_updated)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        """, (p_code, p_name, p_subcounty, p_dept, p_contractor, p_budget, p_spend, p_complete, p_stage, p_status, st.session_state["username"], now_str))
                         conn.commit()
                         conn.close()
 
@@ -671,13 +838,14 @@ with tab_entry:
                 u_col1, u_col2 = st.columns(2)
                 
                 with u_col1:
+                    u_contractor = st.text_input("Update Contractor", value=str(current_row.get('contractor', 'County In-House')))
                     u_spend = st.number_input("Update Spend to Date (KES)", min_value=0.0, step=100000.0, value=float(current_row['actual_spend']))
                     u_complete = st.slider("Update Completion %", min_value=0, max_value=100, value=int(current_row['percentage_complete']))
 
                 with u_col2:
                     stages = ["Draft", "Review", "Approved", "In Progress", "Completed"]
                     u_stage = st.selectbox("Update Workflow Stage", stages, index=stages.index(current_row['workflow_stage']) if current_row['workflow_stage'] in stages else 0)
-                    statuses = ["Active", "Delayed", "Completed", "On Hold"]
+                    statuses = ["Active", "Delayed", "Completed", "On Hold", "Rejected"]
                     u_status = st.selectbox("Update Overall Status", statuses, index=statuses.index(current_row['status']) if current_row['status'] in statuses else 0)
 
                 btn_update = st.form_submit_button("🔄 Update Project Record", use_container_width=True)
@@ -689,13 +857,13 @@ with tab_entry:
                         now_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                         cursor.execute("""
                             UPDATE projects 
-                            SET actual_spend = ?, percentage_complete = ?, workflow_stage = ?, status = ?, last_updated = ?
+                            SET contractor = ?, actual_spend = ?, percentage_complete = ?, workflow_stage = ?, status = ?, last_updated = ?
                             WHERE project_code = ?
-                        """, (u_spend, u_complete, u_stage, u_status, now_str, selected_edit_code))
+                        """, (u_contractor, u_spend, u_complete, u_stage, u_status, now_str, selected_edit_code))
                         conn.commit()
                         conn.close()
 
-                        log_audit_action(st.session_state["username"], "Update Project", selected_edit_code, f"Updated progress to {u_complete}% ({u_stage})")
+                        log_audit_action(st.session_state["username"], "Update Project", selected_edit_code, f"Updated progress to {u_complete}% ({u_status})")
                         st.success(f"✅ Project '{selected_edit_code}' successfully updated!")
                         st.rerun()
                     except Exception as e:
@@ -703,7 +871,10 @@ with tab_entry:
         else:
             st.info("No projects available to update.")
 
+
+# ==========================================
 # TAB 3: DOCUMENT REPOSITORY
+# ==========================================
 with tab_docs:
     st.subheader("📄 Upload & Attach Project Documents")
     
@@ -764,12 +935,15 @@ with tab_docs:
     else:
         st.warning("Please create a project first before attaching documents.")
 
+
+# ==========================================
 # TAB 4: AUDIT TRAIL
+# ==========================================
 with tab_audit:
     st.subheader("🔐 System Audit Logs")
     st.caption("Tracking user activities, project creations, status updates, and logins.")
 
-    audit_df = fetch_audit_logs()
+    audit_df = fetch_audit_logs(limit=100)
 
     if not audit_df.empty:
         st.dataframe(
