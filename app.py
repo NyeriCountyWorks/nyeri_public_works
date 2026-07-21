@@ -246,18 +246,28 @@ def inject_custom_styles():
         [data-testid="stSidebar"] strong {
             color: #D4AF37 !important;
         }
+        /* Fix sidebar button text contrast */
         [data-testid="stSidebar"] button {
             background-color: #FFFFFF !important;
-            color: #0A4D20 !important;
             border: 2px solid #D4AF37 !important;
             border-radius: 20px !important;
             font-weight: bold !important;
             width: 100% !important;
         }
+        [data-testid="stSidebar"] button p, 
+        [data-testid="stSidebar"] button span, 
+        [data-testid="stSidebar"] button div {
+            color: #0A4D20 !important;
+            font-weight: 700 !important;
+        }
         [data-testid="stSidebar"] button:hover {
             background-color: #D4AF37 !important;
-            color: #041f0d !important;
             border-color: #FFFFFF !important;
+        }
+        [data-testid="stSidebar"] button:hover p, 
+        [data-testid="stSidebar"] button:hover span, 
+        [data-testid="stSidebar"] button:hover div {
+            color: #041f0d !important;
         }
         div[data-testid="stMetricValue"] {
             color: #0A4D20 !important;
@@ -419,6 +429,17 @@ def fetch_audit_logs():
     except Exception:
         return pd.DataFrame()
 
+# Helper for budget formatting
+def format_currency_short(val):
+    if val >= 1e9:
+        return f"KES {val/1e9:.2f}B"
+    elif val >= 1e6:
+        return f"KES {val/1e6:.2f}M"
+    elif val >= 1e3:
+        return f"KES {val/1e3:.2f}K"
+    return f"KES {val:,.2f}"
+
+
 # --- 9. APPLICATION NAVIGATION TABS ---
 tab_dash, tab_entry, tab_docs, tab_audit = st.tabs([
     "📊 Executive Dashboard", 
@@ -435,7 +456,7 @@ with tab_dash:
         st.sidebar.header("📊 Filter Projects")
 
         dept_col = next((c for c in df.columns if c.lower() in ["department_assigned", "department", "dept", "dept_name"]), None)
-        status_col = next((c for c in df.columns if c.lower() in ["current_status", "status", "project_status", "stage", "workflow_stage"]), None)
+        status_col = next((c for c in df.columns if c.lower() in ["workflow_stage", "current_status", "status", "stage"]), None)
         budget_col = next((c for c in df.columns if c.lower() in ["budget_allocated", "budget", "cost"]), None)
         name_col = next((c for c in df.columns if c.lower() in ["project_name", "name", "title"]), df.columns[0])
         subcounty_col = next((c for c in df.columns if c.lower() in ["sub_county", "subcounty", "ward"]), None)
@@ -450,7 +471,7 @@ with tab_dash:
 
         if status_col:
             statuses = ["All"] + list(filtered_df[status_col].dropna().unique())
-            selected_status = st.sidebar.selectbox("Filter by Status", statuses)
+            selected_status = st.sidebar.selectbox("Filter by Stage", statuses)
             if selected_status != "All":
                 filtered_df = filtered_df[filtered_df[status_col] == selected_status]
 
@@ -460,20 +481,20 @@ with tab_dash:
 
         total_proj = len(filtered_df)
         completed_proj = 0
-        pending_proj = 0
+        ongoing_proj = 0
 
         if status_col:
-            completed_proj = len(filtered_df[filtered_df[status_col].astype(str).str.lower().str.contains("complete|done|finished|active|approved", na=False)])
-            pending_proj = total_proj - completed_proj
+            completed_proj = len(filtered_df[filtered_df[status_col].astype(str).str.lower().str.contains("complete|done|finished", na=False)])
+            ongoing_proj = total_proj - completed_proj
 
         total_budget = 0.0
         if budget_col:
             total_budget = pd.to_numeric(filtered_df[budget_col], errors="coerce").sum()
 
         kpi1.metric("Total Projects", total_proj)
-        kpi2.metric("Active / Approved", completed_proj)
-        kpi3.metric("Draft / Delayed", pending_proj)
-        kpi4.metric("Total Allocated Budget", f"KES {total_budget:,.2f}")
+        kpi2.metric("Active / Ongoing", ongoing_proj)
+        kpi3.metric("Completed Projects", completed_proj)
+        kpi4.metric("Total Budget Allocated", format_currency_short(total_budget), help=f"Exact Budget: KES {total_budget:,.2f}")
 
         # Charts Section
         col_left, col_right = st.columns(2)
@@ -499,16 +520,16 @@ with tab_dash:
                 status_color_map = {
                     "Completed": "#2e7d32",
                     "Approved": "#4caf50",
-                    "Active": "#0288d1",
+                    "In Progress": "#0288d1",
+                    "Review": "#f57c00",
                     "Draft": "#9e9e9e",
-                    "Delayed": "#e65100",
-                    "Pending": "#f57c00",
+                    "Delayed": "#d32f2f",
                 }
                 fig_status = px.pie(
                     filtered_df,
                     names=status_col,
                     hole=0.4,
-                    title="Project Status Breakdown",
+                    title="Project Stage Breakdown",
                     color=status_col,
                     color_discrete_map=status_color_map,
                 )
@@ -556,58 +577,118 @@ with tab_dash:
         fig_map.update_layout(mapbox_style="open-street-map", margin={"r": 0, "t": 10, "l": 0, "b": 10})
         st.plotly_chart(fig_map, use_container_width=True)
 
-        # Full Table
+        # Full Table with Streamlit Progress Column
         st.subheader("📋 Project Details Table")
-        st.dataframe(filtered_df, use_container_width=True)
+        st.dataframe(
+            filtered_df,
+            column_config={
+                "percentage_complete": st.column_config.ProgressColumn(
+                    "Completion %",
+                    help="Project progress percentage",
+                    format="%d%%",
+                    min_value=0,
+                    max_value=100,
+                ),
+                "budget_allocated": st.column_config.NumberColumn("Allocated Budget (KES)", format="KES %,.2f"),
+                "actual_spend": st.column_config.NumberColumn("Actual Spend (KES)", format="KES %,.2f"),
+            },
+            use_container_width=True,
+            hide_index=True,
+        )
 
     else:
         st.warning("No project data found. Navigate to the **Project Management** tab to enter your first project.")
 
 # TAB 2: PROJECT MANAGEMENT & ENTRY
 with tab_entry:
-    st.subheader("➕ Register New Public Works Project")
+    st.subheader("🛠️ Project Data Management")
     
-    with st.form("new_project_form", clear_on_submit=True):
-        col_p1, col_p2 = st.columns(2)
-        
-        with col_p1:
-            p_code = st.text_input("Project Code", value=f"PRJ-2026-00{len(df)+1}")
-            p_name = st.text_input("Project Name (e.g., Othaya Road Resurfacing)")
-            p_subcounty = st.selectbox("Sub-County", ["Nyeri Town", "Othaya", "Tetu", "Mukurweini", "Mathira East", "Mathira West", "Kieni East", "Kieni West"])
-            p_dept = st.selectbox("Department", ["Roads & Transport", "Public Works", "Water & Sanitation", "Infrastructure & Energy", "Health Services"])
-            p_budget = st.number_input("Allocated Budget (KES)", min_value=0.0, step=500000.0, value=5000000.0)
+    sub_tab1, sub_tab2 = st.tabs(["➕ Create New Project", "✏️ Update Existing Project Progress"])
 
-        with col_p2:
-            p_spend = st.number_input("Actual Spend to Date (KES)", min_value=0.0, step=100000.0, value=0.0)
-            p_complete = st.slider("Completion Percentage (%)", min_value=0, max_value=100, value=0)
-            p_stage = st.selectbox("Workflow Stage", ["Draft", "Review", "Approved", "In Progress", "Completed"])
-            p_status = st.selectbox("Current Status", ["Active", "Delayed", "Completed", "On Hold"])
+    with sub_tab1:
+        with st.form("new_project_form", clear_on_submit=True):
+            col_p1, col_p2 = st.columns(2)
+            
+            with col_p1:
+                p_code = st.text_input("Project Code", value=f"PRJ-2026-00{len(df)+1}")
+                p_name = st.text_input("Project Name (e.g., Othaya Road Resurfacing)")
+                p_subcounty = st.selectbox("Sub-County", ["Nyeri Town", "Othaya", "Tetu", "Mukurweini", "Mathira East", "Mathira West", "Kieni East", "Kieni West"])
+                p_dept = st.selectbox("Department", ["Roads & Transport", "Public Works", "Water & Sanitation", "Infrastructure & Energy", "Health Services"])
+                p_budget = st.number_input("Allocated Budget (KES)", min_value=0.0, step=500000.0, value=5000000.0)
 
-        btn_save = st.form_submit_button("💾 Save Project Record", use_container_width=True)
+            with col_p2:
+                p_spend = st.number_input("Actual Spend to Date (KES)", min_value=0.0, step=100000.0, value=0.0)
+                p_complete = st.slider("Completion Percentage (%)", min_value=0, max_value=100, value=0)
+                p_stage = st.selectbox("Workflow Stage", ["Draft", "Review", "Approved", "In Progress", "Completed"])
+                p_status = st.selectbox("Current Status", ["Active", "Delayed", "Completed", "On Hold"])
 
-        if btn_save:
-            if not p_name.strip() or not p_code.strip():
-                st.error("Please provide both a Project Code and Project Name.")
-            else:
-                try:
-                    conn = sqlite3.connect("nyeri_public_works.db")
-                    cursor = conn.cursor()
-                    now_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                    cursor.execute("""
-                        INSERT INTO projects 
-                        (project_code, project_name, sub_county, department, budget_allocated, actual_spend, percentage_complete, workflow_stage, status, created_by, last_updated)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """, (p_code, p_name, p_subcounty, p_dept, p_budget, p_spend, p_complete, p_stage, p_status, st.session_state["username"], now_str))
-                    conn.commit()
-                    conn.close()
+            btn_save = st.form_submit_button("💾 Save New Project Record", use_container_width=True)
 
-                    log_audit_action(st.session_state["username"], "Create Project", p_code, f"Created project: {p_name}")
-                    st.success(f"✅ Project '{p_name}' successfully created!")
-                    st.rerun()
-                except sqlite3.IntegrityError:
-                    st.error(f"⚠️ Project Code '{p_code}' already exists. Please use a unique code.")
-                except Exception as e:
-                    st.error(f"Error saving project: {e}")
+            if btn_save:
+                if not p_name.strip() or not p_code.strip():
+                    st.error("Please provide both a Project Code and Project Name.")
+                else:
+                    try:
+                        conn = sqlite3.connect("nyeri_public_works.db")
+                        cursor = conn.cursor()
+                        now_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                        cursor.execute("""
+                            INSERT INTO projects 
+                            (project_code, project_name, sub_county, department, budget_allocated, actual_spend, percentage_complete, workflow_stage, status, created_by, last_updated)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        """, (p_code, p_name, p_subcounty, p_dept, p_budget, p_spend, p_complete, p_stage, p_status, st.session_state["username"], now_str))
+                        conn.commit()
+                        conn.close()
+
+                        log_audit_action(st.session_state["username"], "Create Project", p_code, f"Created project: {p_name}")
+                        st.success(f"✅ Project '{p_name}' successfully created!")
+                        st.rerun()
+                    except sqlite3.IntegrityError:
+                        st.error(f"⚠️ Project Code '{p_code}' already exists. Please use a unique code.")
+                    except Exception as e:
+                        st.error(f"Error saving project: {e}")
+
+    with sub_tab2:
+        if not df.empty:
+            selected_edit_code = st.selectbox("Select Project to Update", df["project_code"].unique())
+            current_row = df[df["project_code"] == selected_edit_code].iloc[0]
+
+            with st.form("update_project_form"):
+                st.info(f"Updating **{current_row['project_name']}** ({current_row['project_code']})")
+                u_col1, u_col2 = st.columns(2)
+                
+                with u_col1:
+                    u_spend = st.number_input("Update Spend to Date (KES)", min_value=0.0, step=100000.0, value=float(current_row['actual_spend']))
+                    u_complete = st.slider("Update Completion %", min_value=0, max_value=100, value=int(current_row['percentage_complete']))
+
+                with u_col2:
+                    stages = ["Draft", "Review", "Approved", "In Progress", "Completed"]
+                    u_stage = st.selectbox("Update Workflow Stage", stages, index=stages.index(current_row['workflow_stage']) if current_row['workflow_stage'] in stages else 0)
+                    statuses = ["Active", "Delayed", "Completed", "On Hold"]
+                    u_status = st.selectbox("Update Overall Status", statuses, index=statuses.index(current_row['status']) if current_row['status'] in statuses else 0)
+
+                btn_update = st.form_submit_button("🔄 Update Project Record", use_container_width=True)
+
+                if btn_update:
+                    try:
+                        conn = sqlite3.connect("nyeri_public_works.db")
+                        cursor = conn.cursor()
+                        now_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                        cursor.execute("""
+                            UPDATE projects 
+                            SET actual_spend = ?, percentage_complete = ?, workflow_stage = ?, status = ?, last_updated = ?
+                            WHERE project_code = ?
+                        """, (u_spend, u_complete, u_stage, u_status, now_str, selected_edit_code))
+                        conn.commit()
+                        conn.close()
+
+                        log_audit_action(st.session_state["username"], "Update Project", selected_edit_code, f"Updated progress to {u_complete}% ({u_stage})")
+                        st.success(f"✅ Project '{selected_edit_code}' successfully updated!")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Error updating project: {e}")
+        else:
+            st.info("No projects available to update.")
 
 # TAB 3: DOCUMENT REPOSITORY
 with tab_docs:
