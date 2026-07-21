@@ -272,6 +272,7 @@ def inject_custom_styles():
         div[data-testid="stMetricValue"] {
             color: #0A4D20 !important;
             font-weight: 700 !important;
+            font-size: 1.5rem !important;
         }
     </style>
     """,
@@ -423,7 +424,19 @@ def fetch_project_data():
 def fetch_audit_logs():
     try:
         conn = sqlite3.connect("nyeri_public_works.db")
-        df = pd.read_sql_query("SELECT timestamp, username, action, target_record, details FROM audit_logs ORDER BY log_id DESC LIMIT 10", conn)
+        df = pd.read_sql_query("SELECT timestamp, username, action, target_record, details FROM audit_logs ORDER BY log_id DESC LIMIT 25", conn)
+        conn.close()
+        return df
+    except Exception:
+        return pd.DataFrame()
+
+def fetch_documents(project_code=None):
+    try:
+        conn = sqlite3.connect("nyeri_public_works.db")
+        query = "SELECT project_code, filename, file_path, uploaded_by, upload_timestamp FROM documents"
+        if project_code:
+            query += f" WHERE project_code = '{project_code}'"
+        df = pd.read_sql_query(query, conn)
         conn.close()
         return df
     except Exception:
@@ -695,35 +708,81 @@ with tab_docs:
     st.subheader("📄 Upload & Attach Project Documents")
     
     if not df.empty:
-        selected_proj_code = st.selectbox("Select Target Project Code", df["project_code"].unique())
-        uploaded_file = st.file_uploader("Upload Project Specification / Tender PDF", type=["pdf", "docx", "xlsx"])
+        col_doc1, col_doc2 = st.columns([1, 1])
 
-        if st.button("Upload Document") and uploaded_file and selected_proj_code:
-            os.makedirs("uploads", exist_ok=True)
-            save_path = os.path.join("uploads", uploaded_file.name)
-            with open(save_path, "wb") as f:
-                f.write(uploaded_file.getbuffer())
+        with col_doc1:
+            selected_proj_code = st.selectbox("Select Target Project Code", df["project_code"].unique(), key="doc_project_select")
+            uploaded_file = st.file_uploader("Upload Project Specification / Tender PDF", type=["pdf", "docx", "xlsx", "png", "jpg"])
 
-            conn = sqlite3.connect("nyeri_public_works.db")
-            cursor = conn.cursor()
-            timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            cursor.execute(
-                "INSERT INTO documents (project_code, filename, file_path, uploaded_by, upload_timestamp) VALUES (?, ?, ?, ?, ?)",
-                (selected_proj_code, uploaded_file.name, save_path, st.session_state["username"], timestamp)
-            )
-            conn.commit()
-            conn.close()
+            if st.button("Upload Document") and uploaded_file and selected_proj_code:
+                try:
+                    os.makedirs("uploads", exist_ok=True)
+                    save_path = os.path.join("uploads", uploaded_file.name)
+                    
+                    with open(save_path, "wb") as f:
+                        f.write(uploaded_file.getbuffer())
 
-            log_audit_action(st.session_state["username"], "Document Upload", selected_proj_code, f"Uploaded: {uploaded_file.name}")
-            st.success(f"📎 Document '{uploaded_file.name}' attached to project '{selected_proj_code}' successfully!")
+                    conn = sqlite3.connect("nyeri_public_works.db")
+                    cursor = conn.cursor()
+                    now_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    cursor.execute("""
+                        INSERT INTO documents (project_code, filename, file_path, uploaded_by, upload_timestamp)
+                        VALUES (?, ?, ?, ?, ?)
+                    """, (selected_proj_code, uploaded_file.name, save_path, st.session_state["username"], now_str))
+                    conn.commit()
+                    conn.close()
+
+                    log_audit_action(st.session_state["username"], "Upload Document", selected_proj_code, f"Attached {uploaded_file.name}")
+                    st.success(f"✅ File '{uploaded_file.name}' successfully uploaded for {selected_proj_code}!")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Error uploading document: {e}")
+
+        with col_doc2:
+            st.markdown(f"### 📂 Existing Documents for `{selected_proj_code}`")
+            doc_df = fetch_documents(selected_proj_code)
+
+            if not doc_df.empty:
+                for _, row in doc_df.iterrows():
+                    file_path = row["file_path"]
+                    filename = row["filename"]
+                    
+                    st.write(f"📄 **{filename}**")
+                    st.caption(f"Uploaded by {row['uploaded_by']} on {row['upload_timestamp']}")
+                    
+                    if os.path.exists(file_path):
+                        with open(file_path, "rb") as file_data:
+                            st.download_button(
+                                label=f"📥 Download {filename}",
+                                data=file_data,
+                                file_name=filename,
+                                key=f"dl_{row['filename']}_{row['upload_timestamp']}"
+                            )
+                    st.markdown("---")
+            else:
+                st.info("No documents uploaded for this project yet.")
     else:
-        st.info("No projects available to attach documents to.")
+        st.warning("Please create a project first before attaching documents.")
 
-# TAB 4: SYSTEM AUDIT TRAIL
+# TAB 4: AUDIT TRAIL
 with tab_audit:
     st.subheader("🔐 System Audit Logs")
+    st.caption("Tracking user activities, project creations, status updates, and logins.")
+
     audit_df = fetch_audit_logs()
+
     if not audit_df.empty:
-        st.dataframe(audit_df, use_container_width=True, hide_index=True)
+        st.dataframe(
+            audit_df,
+            column_config={
+                "timestamp": "Timestamp",
+                "username": "User",
+                "action": "Action Taken",
+                "target_record": "Target Record",
+                "details": "Details / Parameters",
+            },
+            use_container_width=True,
+            hide_index=True,
+        )
     else:
-        st.info("No audit logs recorded yet.")
+        st.info("No audit logs available yet.")
