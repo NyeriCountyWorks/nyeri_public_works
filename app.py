@@ -4,178 +4,228 @@
 if not st.session_state["authenticated"] and not st.session_state["is_public"]:
 
     # ==============================
-    # ACCESSIBILITY CONTROLS
+    # ACCESSIBILITY
     # ==============================
     top_left, top_right = st.columns([8, 2])
 
     with top_right:
         with st.expander("♿ Accessibility"):
-            st.session_state["high_contrast"] = st.checkbox(
+            high_contrast_option = st.checkbox(
                 "High Contrast Mode",
                 value=st.session_state["high_contrast"]
             )
 
-            st.session_state["large_font"] = st.checkbox(
+            large_font_option = st.checkbox(
                 "Larger Font Option",
                 value=st.session_state["large_font"]
             )
 
-            if st.button("Apply Accessibility", use_container_width=True):
+            if st.button("Apply Settings", use_container_width=True):
+
+                st.session_state["high_contrast"] = high_contrast_option
+                st.session_state["large_font"] = large_font_option
+
                 st.rerun()
 
     # ==============================
-    # OFFICIAL GOVERNMENT HEADER
+    # PAGE HEADER
     # ==============================
     st.markdown("<br>", unsafe_allow_html=True)
 
     header_left, header_center, header_right = st.columns([1, 2, 1])
 
     with header_center:
+
         if os.path.exists(SEAL_IMAGE):
-            st.image(SEAL_IMAGE, width=130)
+
+            st.image(
+                SEAL_IMAGE,
+                width=115
+            )
+
         else:
+
             st.markdown(
-                "<div style='text-align:center; font-size:70px;'>🏛️</div>",
+                """
+                <div style="
+                    text-align:center;
+                    font-size:65px;
+                    margin-bottom:10px;
+                ">
+                    🏛️
+                </div>
+                """,
                 unsafe_allow_html=True
             )
 
-    st.markdown("""
-    <div style="text-align:center;">
-
+    st.markdown(
+        """
         <div style="
-            font-size:26px;
-            font-weight:800;
-            color:#0A4D20;
-            letter-spacing:0.5px;
+            text-align:center;
+            margin-top:5px;
         ">
-            COUNTY GOVERNMENT OF NYERI
-        </div>
 
-        <div style="
-            font-size:15px;
-            color:#4B5563;
-            margin-top:6px;
-        ">
-            Department of Roads, Public Works & Transport
-        </div>
+            <div style="
+                font-size:25px;
+                font-weight:800;
+                color:#0A4D20;
+                letter-spacing:0.4px;
+            ">
+                COUNTY GOVERNMENT OF NYERI
+            </div>
 
-        <div style="
-            font-size:28px;
-            font-weight:900;
-            color:#0A4D20;
-            margin-top:20px;
-            letter-spacing:1px;
-        ">
-            NYERI UJENZI MIS
-        </div>
+            <div style="
+                font-size:14px;
+                color:#4B5563;
+                margin-top:5px;
+            ">
+                Department of Roads, Public Works & Transport
+            </div>
 
-        <div style="
-            font-size:14px;
-            color:#6B7280;
-            margin-top:4px;
-        ">
-            Infrastructure, Projects & Public Works
-            Management Information System
-        </div>
+            <div style="
+                font-size:27px;
+                font-weight:900;
+                color:#0A4D20;
+                letter-spacing:1.2px;
+                margin-top:18px;
+            ">
+                NYERI UJENZI MIS
+            </div>
 
-        <div style="
-            font-size:11px;
-            color:#9CA3AF;
-            margin-top:8px;
-            margin-bottom:25px;
-        ">
-            Secure Enterprise Government Information System
-            • Version 2.0.0
-        </div>
+            <div style="
+                font-size:13px;
+                color:#6B7280;
+                margin-top:5px;
+            ">
+                Infrastructure, Projects & Public Works
+                Management Information System
+            </div>
 
-    </div>
-    """, unsafe_allow_html=True)
+            <div style="
+                font-size:11px;
+                color:#9CA3AF;
+                margin-top:8px;
+                margin-bottom:22px;
+            ">
+                Secure Enterprise Government Information System
+                • Version 2.0.0
+            </div>
+
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
 
     # ==============================
-    # MAIN LOGIN CONTAINER
+    # LOGIN CARD
     # ==============================
-    login_left, login_center, login_right = st.columns([1, 1.5, 1])
+    login_left, login_center, login_right = st.columns(
+        [1.1, 1.8, 1.1]
+    )
 
     with login_center:
 
-        st.markdown("""
-        <div style="
-            background:#FFFFFF;
-            padding:25px;
-            border-radius:14px;
-            border:1px solid #E5E7EB;
-            box-shadow:0 8px 25px rgba(0,0,0,0.08);
-            margin-bottom:20px;
-        ">
-
+        st.markdown(
+            """
             <div style="
+                background:#FFFFFF;
+                border:1px solid #E5E7EB;
+                border-radius:14px 14px 0 0;
+                padding:22px 25px 15px 25px;
+                box-shadow:0 6px 20px rgba(0,0,0,0.06);
                 text-align:center;
-                font-size:22px;
-                font-weight:800;
-                color:#111827;
-                margin-bottom:5px;
             ">
-                Staff Sign In
+
+                <div style="
+                    font-size:22px;
+                    font-weight:800;
+                    color:#111827;
+                ">
+                    Staff Sign In
+                </div>
+
+                <div style="
+                    font-size:13px;
+                    color:#6B7280;
+                    margin-top:5px;
+                ">
+                    Access your authorized county workspace
+                </div>
+
             </div>
-
-            <div style="
-                text-align:center;
-                font-size:13px;
-                color:#6B7280;
-                margin-bottom:15px;
-            ">
-                Access your authorized county workspace
-            </div>
-
-        </div>
-        """, unsafe_allow_html=True)
+            """,
+            unsafe_allow_html=True
+        )
 
         # ==============================
-        # LOGIN TABS
+        # TABS
         # ==============================
-        t_login, t_forgot, t_public = st.tabs([
-            "🔒 Staff Sign In",
-            "🔑 Forgot Password",
-            "🌐 Citizen Portal"
-        ])
+        t_login, t_forgot, t_public = st.tabs(
+            [
+                "🔒 Sign In",
+                "🔑 Password",
+                "🌐 Citizen Portal"
+            ]
+        )
 
-        # ==============================
+        # ==================================================
         # STAFF LOGIN
-        # ==============================
+        # ==================================================
         with t_login:
 
-            st.markdown("""
-            <div style="
-                background:#F0FDF4;
-                border:1px solid #BBF7D0;
-                border-left:4px solid #16A34A;
-                padding:12px;
-                border-radius:6px;
-                margin-bottom:18px;
-                font-size:12px;
-                color:#166534;
-            ">
-                🔒 <strong>Secure County Government System</strong><br>
-                Your account activity is protected and audited.
-            </div>
-            """, unsafe_allow_html=True)
+            st.markdown(
+                """
+                <div style="
+                    background:#F0FDF4;
+                    border:1px solid #BBF7D0;
+                    border-left:4px solid #16A34A;
+                    padding:11px 13px;
+                    border-radius:6px;
+                    margin:12px 0 18px 0;
+                    font-size:12px;
+                    color:#166534;
+                ">
+                    🔒 <strong>Secure County Government System</strong><br>
+                    Your account activity is protected and audited.
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
 
+            # ==============================
+            # MFA LOGIN
+            # ==============================
             if st.session_state["mfa_pending"]:
 
                 st.info(
-                    "🔐 Multi-Factor Authentication Required for this account."
+                    "🔐 Multi-Factor Authentication Required"
                 )
 
-                st.write(
-                    f"Enter the authentication code for: "
-                    f"**{st.session_state['mfa_user_data']['full_name']}**"
+                st.markdown(
+                    f"""
+                    <div style="
+                        text-align:center;
+                        background:#F9FAFB;
+                        padding:12px;
+                        border-radius:8px;
+                        margin-bottom:15px;
+                        font-size:13px;
+                    ">
+                        Authentication required for<br>
+                        <strong>
+                        {st.session_state["mfa_user_data"]["full_name"]}
+                        </strong>
+                    </div>
+                    """,
+                    unsafe_allow_html=True
                 )
 
                 with st.form("mfa_form"):
 
                     otp = st.text_input(
                         "One-Time Passcode",
-                        type="password"
+                        type="password",
+                        placeholder="Enter authentication code"
                     )
 
                     verify_button = st.form_submit_button(
@@ -188,18 +238,45 @@ if not st.session_state["authenticated"] and not st.session_state["is_public"]:
                         # DEMO MFA CODE
                         if otp == "1234":
 
-                            u_data = st.session_state["mfa_user_data"]
+                            u_data = st.session_state[
+                                "mfa_user_data"
+                            ]
 
-                            st.session_state["authenticated"] = True
-                            st.session_state["username"] = u_data["username"]
-                            st.session_state["role"] = u_data["role"]
-                            st.session_state["full_name"] = u_data["full_name"]
-                            st.session_state["department"] = u_data["department"]
-                            st.session_state["employee_number"] = u_data["employee_number"]
-                            st.session_state["last_login"] = u_data["last_login"]
-                            st.session_state["last_login_ip"] = u_data["last_login_ip"]
+                            st.session_state[
+                                "authenticated"
+                            ] = True
 
-                            st.session_state["mfa_pending"] = False
+                            st.session_state[
+                                "username"
+                            ] = u_data["username"]
+
+                            st.session_state[
+                                "role"
+                            ] = u_data["role"]
+
+                            st.session_state[
+                                "full_name"
+                            ] = u_data["full_name"]
+
+                            st.session_state[
+                                "department"
+                            ] = u_data["department"]
+
+                            st.session_state[
+                                "employee_number"
+                            ] = u_data["employee_number"]
+
+                            st.session_state[
+                                "last_login"
+                            ] = u_data["last_login"]
+
+                            st.session_state[
+                                "last_login_ip"
+                            ] = u_data["last_login_ip"]
+
+                            st.session_state[
+                                "mfa_pending"
+                            ] = False
 
                             log_audit_action(
                                 u_data["username"],
@@ -209,12 +286,17 @@ if not st.session_state["authenticated"] and not st.session_state["is_public"]:
                                 "MFA verified successfully"
                             )
 
-                            st.success("Authentication successful.")
                             st.rerun()
 
                         else:
-                            st.error("Invalid authentication code.")
 
+                            st.error(
+                                "Invalid authentication code."
+                            )
+
+            # ==============================
+            # NORMAL LOGIN
+            # ==============================
             else:
 
                 with st.form("clean_login_form"):
@@ -228,6 +310,20 @@ if not st.session_state["authenticated"] and not st.session_state["is_public"]:
                         "Password",
                         type="password",
                         placeholder="Enter your password"
+                    )
+
+                    st.markdown(
+                        """
+                        <div style="
+                            text-align:center;
+                            font-size:11px;
+                            color:#6B7280;
+                            margin:8px 0 12px 0;
+                        ">
+                            🔒 Secure access • 🔐 Activity audited
+                        </div>
+                        """,
+                        unsafe_allow_html=True
                     )
 
                     submitted = st.form_submit_button(
@@ -246,11 +342,14 @@ if not st.session_state["authenticated"] and not st.session_state["is_public"]:
 
                         else:
 
-                            ip_key = u_input.strip().lower()
+                            login_key = u_input.strip().lower()
 
                             attempts = st.session_state[
                                 "failed_attempts"
-                            ].get(ip_key, 0)
+                            ].get(
+                                login_key,
+                                0
+                            )
 
                             if attempts >= 3:
 
@@ -270,8 +369,9 @@ if not st.session_state["authenticated"] and not st.session_state["is_public"]:
 
                                     st.session_state[
                                         "failed_attempts"
-                                    ][ip_key] = 0
+                                    ][login_key] = 0
 
+                                    # MFA REQUIRED FOR SENIOR ROLES
                                     if user_data["role"] in [
                                         "CECM",
                                         "Chief Officer",
@@ -288,6 +388,7 @@ if not st.session_state["authenticated"] and not st.session_state["is_public"]:
 
                                         st.rerun()
 
+                                    # NORMAL USER LOGIN
                                     else:
 
                                         st.session_state[
@@ -330,17 +431,13 @@ if not st.session_state["authenticated"] and not st.session_state["is_public"]:
                                             "Authenticated successfully"
                                         )
 
-                                        st.success(
-                                            "Login successful. Loading your workspace..."
-                                        )
-
                                         st.rerun()
 
                                 else:
 
                                     st.session_state[
                                         "failed_attempts"
-                                    ][ip_key] = attempts + 1
+                                    ][login_key] = attempts + 1
 
                                     remaining = 3 - (
                                         attempts + 1
@@ -359,25 +456,32 @@ if not st.session_state["authenticated"] and not st.session_state["is_public"]:
                                             "Account temporarily locked."
                                         )
 
-            st.markdown("""
-            <div style="
-                text-align:center;
-                font-size:11px;
-                color:#6B7280;
-                margin-top:15px;
-            ">
-                ⏱️ Session timeout: 15 minutes of inactivity
-                <br>
-                🔒 All authorized activities are recorded in the audit trail
-            </div>
-            """, unsafe_allow_html=True)
+            st.markdown(
+                """
+                <div style="
+                    text-align:center;
+                    font-size:11px;
+                    color:#6B7280;
+                    margin-top:18px;
+                    padding-top:12px;
+                    border-top:1px solid #E5E7EB;
+                ">
+                    ⏱️ Session timeout: 15 minutes of inactivity
+                    <br>
+                    🔒 All authorized activities are recorded in the audit trail
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
 
-        # ==============================
-        # FORGOT PASSWORD
-        # ==============================
+        # ==================================================
+        # PASSWORD RESET
+        # ==================================================
         with t_forgot:
 
-            st.subheader("🔑 Password Reset")
+            st.subheader(
+                "🔑 Password Reset"
+            )
 
             st.caption(
                 "Verify your official identity to reset your account password."
@@ -488,9 +592,9 @@ if not st.session_state["authenticated"] and not st.session_state["is_public"]:
                                 "Invalid Username and Employee Number combination."
                             )
 
-        # ==============================
+        # ==================================================
         # CITIZEN PORTAL
-        # ==============================
+        # ==================================================
         with t_public:
 
             st.subheader(
@@ -500,6 +604,24 @@ if not st.session_state["authenticated"] and not st.session_state["is_public"]:
             st.write(
                 "Access public infrastructure information, "
                 "project progress and transparency records."
+            )
+
+            st.markdown(
+                """
+                <div style="
+                    background:#F9FAFB;
+                    border:1px solid #E5E7EB;
+                    border-radius:8px;
+                    padding:14px;
+                    margin:15px 0;
+                    font-size:13px;
+                    color:#4B5563;
+                ">
+                    View selected public county projects, progress information,
+                    and transparency records without creating an account.
+                </div>
+                """,
+                unsafe_allow_html=True
             )
 
             if st.button(
@@ -517,20 +639,29 @@ if not st.session_state["authenticated"] and not st.session_state["is_public"]:
         # ==============================
         # FOOTER
         # ==============================
-        st.markdown("""
-        <div style="
-            text-align:center;
-            margin-top:25px;
-            padding-top:15px;
-            border-top:1px solid #E5E7EB;
-            font-size:11px;
-            color:#6B7280;
-            line-height:1.6;
-        ">
-            <strong>County Government of Nyeri</strong><br>
-            Nyeri Ujenzi MIS • Version 2.0.0<br>
-            Authorized access only • All activities are audited
-        </div>
-        """, unsafe_allow_html=True)
+        st.markdown(
+            """
+            <div style="
+                text-align:center;
+                margin-top:25px;
+                padding-top:15px;
+                border-top:1px solid #E5E7EB;
+                font-size:11px;
+                color:#6B7280;
+                line-height:1.6;
+            ">
+
+                <strong>County Government of Nyeri</strong>
+                <br>
+
+                NYERI UJENZI MIS • Version 2.0.0
+                <br>
+
+                Authorized access only • All activities are audited
+
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
 
     st.stop()
