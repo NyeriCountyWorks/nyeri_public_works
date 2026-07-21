@@ -1,7 +1,4 @@
-# ==========================================
-# WORKSPACE 0: USER PROFILE & CHANGE PASSWORD
-# ==========================================
-if nav_choice == "👤 My Profile":
+Profile":
     st.header("👤 Staff Profile & Account Settings")
     st.caption("Manage your enterprise user credentials and view session security metrics.")
     
