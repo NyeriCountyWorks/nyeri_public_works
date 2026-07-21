@@ -11,7 +11,7 @@ import streamlit as st
 
 # --- 1. ENTERPRISE DATABASE & AUDIT HELPERS ---
 def init_enterprise_db():
-    """Initializes the database with tables for projects, documents, workflows, and audits."""
+    """Initializes the database with tables for projects, documents, workflows, and audits, and seeds sample data."""
     try:
         conn = sqlite3.connect("nyeri_public_works.db")
         cursor = conn.cursor()
@@ -35,7 +35,7 @@ def init_enterprise_db():
             cursor.execute("INSERT INTO users (username, password, full_name, role) VALUES ('director', 'dir123', 'Public Works Director', 'Director')")
             cursor.execute("INSERT INTO users (username, password, full_name, role) VALUES ('chief', 'chief123', 'Chief Officer', 'Chief Officer')")
 
-        # 2. Projects Table (Includes progress and workflow stages)
+        # 2. Projects Table
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS projects (
                 project_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -53,7 +53,24 @@ def init_enterprise_db():
             )
         ''')
 
-        # 3. Document Management Table (For PDF Uploads)
+        # Seed sample Nyeri County projects if table is empty
+        cursor.execute("SELECT COUNT(*) FROM projects")
+        if cursor.fetchone()[0] == 0:
+            sample_projects = [
+                ("PRJ-2026-001", "Karatina Market Modernization & Drainage", "Mathira East", "Infrastructure & Energy", 45000000.0, 38000000.0, 85, "In Progress", "Active", "admin", "2026-01-10 09:00:00"),
+                ("PRJ-2026-002", "Othaya Sub-County Hospital Wing Extension", "Othaya", "Public Works", 60000000.0, 60000000.0, 100, "Completed", "Completed", "director", "2026-02-14 11:30:00"),
+                ("PRJ-2026-003", "Tetu High-Altitude Training Water Pipeline", "Tetu", "Water & Sanitation", 18500000.0, 12000000.0, 65, "In Progress", "Active", "engineer", "2026-03-01 14:15:00"),
+                ("PRJ-2026-004", "Mukurwe-ini Feeder Roads Tarmacking", "Mukurweini", "Roads & Transport", 82000000.0, 25000000.0, 30, "Review", "Delayed", "engineer", "2026-03-20 10:45:00"),
+                ("PRJ-2026-005", "Nyeri Town Bus Park Stormwater System", "Nyeri Town", "Public Works", 12000000.0, 1500000.0, 15, "Draft", "Active", "admin", "2026-04-05 16:20:00"),
+                ("PRJ-2026-006", "Kieni East Earth Dam Rehabilitation", "Kieni East", "Water & Sanitation", 35000000.0, 32000000.0, 90, "Approved", "Active", "chief", "2026-05-12 08:50:00")
+            ]
+            cursor.executemany("""
+                INSERT INTO projects 
+                (project_code, project_name, sub_county, department, budget_allocated, actual_spend, percentage_complete, workflow_stage, status, created_by, last_updated)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, sample_projects)
+
+        # 3. Document Management Table
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS documents (
                 doc_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -98,7 +115,7 @@ def log_audit_action(username, action, target, details=""):
         print(f"Audit log failed: {e}")
 
 def verify_login(username, password):
-    """Verify user credentials against SQLite or static fallback."""
+    """Verify user credentials against SQLite database."""
     try:
         conn = sqlite3.connect("nyeri_public_works.db")
         cursor = conn.cursor()
@@ -120,7 +137,7 @@ def verify_login(username, password):
     return None
 
 def register_user(username, password, full_name, role="Viewer"):
-    """Register a new user in the SQLite database and log the action."""
+    """Register a new user in the SQLite database."""
     try:
         conn = sqlite3.connect("nyeri_public_works.db")
         cursor = conn.cursor()
@@ -131,9 +148,7 @@ def register_user(username, password, full_name, role="Viewer"):
         conn.commit()
         conn.close()
         
-        # Log the registration
         log_audit_action(username, "Registration", "System", f"Account created with role: {role}")
-        
         return True, "🎉 Account created successfully! You can now log in."
     except sqlite3.IntegrityError:
         return False, "⚠️ Username already exists. Please pick a different username."
@@ -187,41 +202,14 @@ NYERI_SEAL_FALLBACK_SVG = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 
       <polygon points="250,105 225,140 250,135 275,140" fill="#FFFFFF" />
       <rect x="150" y="180" width="200" height="60" fill="#8bc34a" stroke="#ffffff" stroke-width="2" />
       <circle cx="250" cy="210" r="7" fill="#e74c3c" />
-      <circle cx="242" cy="206" r="6" fill="#c0392b" />
-      <circle cx="258" cy="208" r="6" fill="#c0392b" />
-      <path d="M 245,215 Q 250,205 255,215" stroke="#27ae60" stroke-width="2" fill="none" />
       <rect x="150" y="235" width="200" height="70" fill="#f39c12" />
-      <rect x="230" y="255" width="40" height="20" rx="3" fill="#FFFFFF" stroke="#000000" stroke-width="1.5" />
-      <rect x="260" y="252" width="12" height="12" rx="2" fill="#FFFFFF" stroke="#000000" stroke-width="1.5" />
-      <circle cx="238" cy="262" r="3.5" fill="#000000" />
-      <circle cx="254" cy="268" r="4.5" fill="#000000" />
-      <line x1="235" y1="275" x2="235" y2="288" stroke="#000000" stroke-width="2.5" />
-      <line x1="242" y1="275" x2="242" y2="288" stroke="#000000" stroke-width="2.5" />
-      <line x1="258" y1="275" x2="258" y2="288" stroke="#000000" stroke-width="2.5" />
-      <line x1="265" y1="275" x2="265" y2="288" stroke="#000000" stroke-width="2.5" />
     </g>
   </g>
-
-  <path d="M 100,280 Q 120,180 178,160 Q 170,140 150,110 Q 165,115 174,138 Q 185,190 175,270 L 170,330 Q 150,340 100,280 Z" fill="#b87333" stroke="#4a2c11" stroke-width="2" />
-  <path d="M 132,240 Q 142,242 145,260 M 125,250 Q 135,252 138,270" stroke="#FFFFFF" stroke-width="2.5" fill="none" />
-  <path d="M 152,112 Q 135,70 148,40 Q 155,60 156,92" fill="#111111" />
-
-  <path d="M 400,280 Q 380,180 322,160 Q 330,140 350,110 Q 335,115 326,138 Q 315,190 325,270 L 330,330 Q 350,340 400,280 Z" fill="#b87333" stroke="#4a2c11" stroke-width="2" />
-  <path d="M 368,240 Q 358,242 355,260 M 375,250 Q 365,252 362,270" stroke="#FFFFFF" stroke-width="2.5" fill="none" />
-  <path d="M 348,112 Q 365,70 352,40 Q 345,60 344,92" fill="#111111" />
 
   <path d="M 90,340 Q 250,390 410,340 L 390,390 Q 250,440 110,390 Z" fill="#2980b9" stroke="url(#goldGradient)" stroke-width="3" />
   <text font-family="'Poppins', 'Inter', sans-serif" font-size="20" font-weight="bold" fill="#FFFFFF" letter-spacing="1.5">
     <textPath href="#bottomTextCirclePath" startOffset="50%" text-anchor="middle">Ndaragwa na Maitu</textPath>
   </text>
-
-  <g fill="#2980b9" transform="translate(0, 10)">
-    <polygon points="170,415 173,425 183,425 175,431 178,441 170,435 162,441 165,431 157,425 167,425" />
-    <polygon points="210,430 213,440 223,440 215,446 218,456 210,450 202,456 205,446 197,440 207,440" />
-    <polygon points="250,435 253,445 263,445 255,451 258,461 250,455 242,461 245,451 237,445 247,445" />
-    <polygon points="290,430 293,440 303,440 295,446 298,456 290,450 282,456 285,446 277,440 287,440" />
-    <polygon points="330,415 333,425 343,425 335,431 338,441 330,435 322,441 325,431 317,425 327,425" />
-  </g>
 </svg>"""
 
 def get_nyeri_seal_element():
@@ -333,9 +321,7 @@ if not st.session_state["authenticated"]:
                         st.session_state["full_name"] = user_data["full_name"]
                         st.session_state["just_logged_in"] = True
                         
-                        # Log Audit Event
                         log_audit_action(user_data["username"], "Login", "System", "User logged in successfully")
-                        
                         st.rerun()
                     else:
                         st.error("Invalid username or password.")
@@ -394,16 +380,13 @@ if st.sidebar.button("Logout"):
 
 st.sidebar.markdown("---")
 
-# --- 7. WELCOME TOAST NOTIFICATION ON LOGIN ---
+# --- 7. WELCOME TOAST NOTIFICATION ---
 current_greeting = get_time_greeting()
 user_display = st.session_state.get("full_name", st.session_state.get("username", "User"))
 
 if st.session_state.get("just_logged_in", False):
     st.toast(f"👋 {current_greeting}, {user_display}! Welcome to Nyeri MIS Portal.", icon="🏛️")
     st.session_state["just_logged_in"] = False
-
-# --- 8. DASHBOARD MAIN CONTENT ---
-st.title("🏛️ Department of Public Works, Roads & Infrastructure")
 
 # Dynamic Header Banner
 st.markdown(
@@ -416,10 +399,10 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
+# --- 8. FETCH DATA FUNCTIONS ---
 def fetch_project_data():
     try:
         conn = sqlite3.connect("nyeri_public_works.db")
-        # Explicitly read from the newly created 'projects' table
         df = pd.read_sql_query("SELECT * FROM projects", conn)
         conn.close()
         return df
@@ -430,156 +413,236 @@ def fetch_project_data():
 def fetch_audit_logs():
     try:
         conn = sqlite3.connect("nyeri_public_works.db")
-        df = pd.read_sql_query("SELECT timestamp, username, action, target_record, details FROM audit_logs ORDER BY log_id DESC LIMIT 5", conn)
+        df = pd.read_sql_query("SELECT timestamp, username, action, target_record, details FROM audit_logs ORDER BY log_id DESC LIMIT 10", conn)
         conn.close()
         return df
     except Exception:
         return pd.DataFrame()
 
+# --- 9. APPLICATION NAVIGATION TABS ---
+tab_dash, tab_entry, tab_docs, tab_audit = st.tabs([
+    "📊 Executive Dashboard", 
+    "➕ Project Management", 
+    "📄 Document Repository", 
+    "🔐 Audit Trail"
+])
 
 df = fetch_project_data()
 
-if not df.empty:
-    st.sidebar.header("📊 Filter Projects")
+# TAB 1: EXECUTIVE DASHBOARD
+with tab_dash:
+    if not df.empty:
+        st.sidebar.header("📊 Filter Projects")
 
-    dept_col = next((c for c in df.columns if c.lower() in ["department_assigned", "department", "dept", "dept_name"]), None)
-    status_col = next((c for c in df.columns if c.lower() in ["current_status", "status", "project_status", "stage", "workflow_stage"]), None)
-    budget_col = next((c for c in df.columns if c.lower() in ["budget_allocated", "budget", "cost"]), None)
-    name_col = next((c for c in df.columns if c.lower() in ["project_name", "name", "title"]), df.columns[0])
-    subcounty_col = next((c for c in df.columns if c.lower() in ["sub_county", "subcounty", "ward"]), None)
+        dept_col = next((c for c in df.columns if c.lower() in ["department_assigned", "department", "dept", "dept_name"]), None)
+        status_col = next((c for c in df.columns if c.lower() in ["current_status", "status", "project_status", "stage", "workflow_stage"]), None)
+        budget_col = next((c for c in df.columns if c.lower() in ["budget_allocated", "budget", "cost"]), None)
+        name_col = next((c for c in df.columns if c.lower() in ["project_name", "name", "title"]), df.columns[0])
+        subcounty_col = next((c for c in df.columns if c.lower() in ["sub_county", "subcounty", "ward"]), None)
 
-    filtered_df = df.copy()
+        filtered_df = df.copy()
 
-    if dept_col:
-        departments = ["All"] + list(filtered_df[dept_col].dropna().unique())
-        selected_dept = st.sidebar.selectbox("Filter by Department", departments)
-        if selected_dept != "All":
-            filtered_df = filtered_df[filtered_df[dept_col] == selected_dept]
-
-    if status_col:
-        statuses = ["All"] + list(filtered_df[status_col].dropna().unique())
-        selected_status = st.sidebar.selectbox("Filter by Status", statuses)
-        if selected_status != "All":
-            filtered_df = filtered_df[filtered_df[status_col] == selected_status]
-
-    # --- KPI METRICS ---
-    st.subheader(f"Executive Summary ({len(filtered_df)} Projects Displayed)")
-    kpi1, kpi2, kpi3, kpi4 = st.columns(4)
-
-    total_proj = len(filtered_df)
-    completed_proj = 0
-    pending_proj = 0
-
-    if status_col:
-        completed_proj = len(filtered_df[filtered_df[status_col].astype(str).str.lower().str.contains("complete|done|finished|active|approved", na=False)])
-        pending_proj = total_proj - completed_proj
-
-    total_budget = 0.0
-    if budget_col:
-        total_budget = pd.to_numeric(filtered_df[budget_col], errors="coerce").sum()
-
-    kpi1.metric("Total Projects", total_proj)
-    kpi2.metric("Active / Approved Projects", completed_proj)
-    kpi3.metric("Draft / Pending Projects", pending_proj)
-    kpi4.metric("Total Budget Allocated", f"KES {total_budget:,.2f}")
-
-    # --- MULTI-COLOR CHARTS ---
-    col_left, col_right = st.columns(2)
-
-    with col_left:
         if dept_col:
-            dept_counts = filtered_df[dept_col].value_counts().reset_index()
-            dept_counts.columns = ["Department", "Count"]
+            departments = ["All"] + list(filtered_df[dept_col].dropna().unique())
+            selected_dept = st.sidebar.selectbox("Filter by Department", departments)
+            if selected_dept != "All":
+                filtered_df = filtered_df[filtered_df[dept_col] == selected_dept]
 
-            fig_dept = px.bar(
-                dept_counts,
-                x="Department",
-                y="Count",
-                color="Department",
-                color_discrete_sequence=px.colors.qualitative.Bold,
-                labels={"Department": "Department", "Count": "Project Count"},
-            )
-            fig_dept.update_layout(xaxis_tickangle=-45, showlegend=False, margin=dict(t=20, b=20))
-            st.plotly_chart(fig_dept, use_container_width=True)
-        else:
-            st.info("No department data column found.")
-
-    with col_right:
         if status_col:
-            status_color_map = {
-                "Completed": "#2e7d32",
-                "Approved": "#4caf50",
-                "Active": "#0288d1",
-                "Draft": "#9e9e9e",
-                "Pending": "#f57c00",
-                "Rejected": "#d32f2f",
-            }
-            fig_status = px.pie(
-                filtered_df,
-                names=status_col,
-                hole=0.4,
-                color=status_col,
-                color_discrete_map=status_color_map,
+            statuses = ["All"] + list(filtered_df[status_col].dropna().unique())
+            selected_status = st.sidebar.selectbox("Filter by Status", statuses)
+            if selected_status != "All":
+                filtered_df = filtered_df[filtered_df[status_col] == selected_status]
+
+        # KPI Metrics
+        st.subheader(f"Executive Summary ({len(filtered_df)} Projects Displayed)")
+        kpi1, kpi2, kpi3, kpi4 = st.columns(4)
+
+        total_proj = len(filtered_df)
+        completed_proj = 0
+        pending_proj = 0
+
+        if status_col:
+            completed_proj = len(filtered_df[filtered_df[status_col].astype(str).str.lower().str.contains("complete|done|finished|active|approved", na=False)])
+            pending_proj = total_proj - completed_proj
+
+        total_budget = 0.0
+        if budget_col:
+            total_budget = pd.to_numeric(filtered_df[budget_col], errors="coerce").sum()
+
+        kpi1.metric("Total Projects", total_proj)
+        kpi2.metric("Active / Approved", completed_proj)
+        kpi3.metric("Draft / Delayed", pending_proj)
+        kpi4.metric("Total Allocated Budget", f"KES {total_budget:,.2f}")
+
+        # Charts Section
+        col_left, col_right = st.columns(2)
+
+        with col_left:
+            if dept_col:
+                dept_counts = filtered_df[dept_col].value_counts().reset_index()
+                dept_counts.columns = ["Department", "Count"]
+
+                fig_dept = px.bar(
+                    dept_counts,
+                    x="Department",
+                    y="Count",
+                    color="Department",
+                    title="Projects by Department",
+                    color_discrete_sequence=px.colors.qualitative.Bold,
+                )
+                fig_dept.update_layout(xaxis_tickangle=-30, showlegend=False, margin=dict(t=30, b=20))
+                st.plotly_chart(fig_dept, use_container_width=True)
+
+        with col_right:
+            if status_col:
+                status_color_map = {
+                    "Completed": "#2e7d32",
+                    "Approved": "#4caf50",
+                    "Active": "#0288d1",
+                    "Draft": "#9e9e9e",
+                    "Delayed": "#e65100",
+                    "Pending": "#f57c00",
+                }
+                fig_status = px.pie(
+                    filtered_df,
+                    names=status_col,
+                    hole=0.4,
+                    title="Project Status Breakdown",
+                    color=status_col,
+                    color_discrete_map=status_color_map,
+                )
+                fig_status.update_layout(margin=dict(t=30, b=20))
+                st.plotly_chart(fig_status, use_container_width=True)
+
+        # GIS Interactive Nyeri Map
+        st.subheader("🗺️ Nyeri County Project GIS Map")
+
+        NYERI_COORDINATES = {
+            "mathira east": (-0.4812, 37.1281), "mathira west": (-0.4285, 37.0600),
+            "othaya": (-0.5439, 36.9472), "mukurweini": (-0.5606, 37.0483),
+            "tetu": (-0.4350, 36.8833), "nyeri town": (-0.4201, 36.9476),
+            "kieni east": (-0.1500, 37.0500), "kieni west": (-0.2800, 36.8500),
+        }
+
+        def assign_coordinates(row):
+            loc_str = ""
+            if subcounty_col and row.get(subcounty_col): loc_str += str(row.get(subcounty_col)).lower()
+            if name_col and row.get(name_col): loc_str += " " + str(row.get(name_col)).lower()
+
+            for key, coords in NYERI_COORDINATES.items():
+                if key in loc_str: return coords
+            return (-0.4201, 36.9476) 
+
+        map_df = filtered_df.copy()
+        coords = map_df.apply(assign_coordinates, axis=1)
+        map_df["latitude"] = [c[0] for c in coords]
+        map_df["longitude"] = [c[1] for c in coords]
+
+        np.random.seed(42)
+        map_df["latitude"] += np.random.uniform(-0.008, 0.008, size=len(map_df))
+        map_df["longitude"] += np.random.uniform(-0.008, 0.008, size=len(map_df))
+
+        hover_cols = {c: True for c in [dept_col, status_col] if c}
+        if budget_col: hover_cols[budget_col] = ":,.2f"
+        hover_cols["latitude"] = False
+        hover_cols["longitude"] = False
+
+        fig_map = px.scatter_mapbox(
+            map_df, lat="latitude", lon="longitude", hover_name=name_col,
+            hover_data=hover_cols, color=status_col if status_col else None,
+            zoom=9.5, center={"lat": -0.4201, "lon": 36.9476}, height=450,
+        )
+        fig_map.update_layout(mapbox_style="open-street-map", margin={"r": 0, "t": 10, "l": 0, "b": 10})
+        st.plotly_chart(fig_map, use_container_width=True)
+
+        # Full Table
+        st.subheader("📋 Project Details Table")
+        st.dataframe(filtered_df, use_container_width=True)
+
+    else:
+        st.warning("No project data found. Navigate to the **Project Management** tab to enter your first project.")
+
+# TAB 2: PROJECT MANAGEMENT & ENTRY
+with tab_entry:
+    st.subheader("➕ Register New Public Works Project")
+    
+    with st.form("new_project_form", clear_on_submit=True):
+        col_p1, col_p2 = st.columns(2)
+        
+        with col_p1:
+            p_code = st.text_input("Project Code", value=f"PRJ-2026-00{len(df)+1}")
+            p_name = st.text_input("Project Name (e.g., Othaya Road Resurfacing)")
+            p_subcounty = st.selectbox("Sub-County", ["Nyeri Town", "Othaya", "Tetu", "Mukurweini", "Mathira East", "Mathira West", "Kieni East", "Kieni West"])
+            p_dept = st.selectbox("Department", ["Roads & Transport", "Public Works", "Water & Sanitation", "Infrastructure & Energy", "Health Services"])
+            p_budget = st.number_input("Allocated Budget (KES)", min_value=0.0, step=500000.0, value=5000000.0)
+
+        with col_p2:
+            p_spend = st.number_input("Actual Spend to Date (KES)", min_value=0.0, step=100000.0, value=0.0)
+            p_complete = st.slider("Completion Percentage (%)", min_value=0, max_value=100, value=0)
+            p_stage = st.selectbox("Workflow Stage", ["Draft", "Review", "Approved", "In Progress", "Completed"])
+            p_status = st.selectbox("Current Status", ["Active", "Delayed", "Completed", "On Hold"])
+
+        btn_save = st.form_submit_button("💾 Save Project Record", use_container_width=True)
+
+        if btn_save:
+            if not p_name.strip() or not p_code.strip():
+                st.error("Please provide both a Project Code and Project Name.")
+            else:
+                try:
+                    conn = sqlite3.connect("nyeri_public_works.db")
+                    cursor = conn.cursor()
+                    now_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    cursor.execute("""
+                        INSERT INTO projects 
+                        (project_code, project_name, sub_county, department, budget_allocated, actual_spend, percentage_complete, workflow_stage, status, created_by, last_updated)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """, (p_code, p_name, p_subcounty, p_dept, p_budget, p_spend, p_complete, p_stage, p_status, st.session_state["username"], now_str))
+                    conn.commit()
+                    conn.close()
+
+                    log_audit_action(st.session_state["username"], "Create Project", p_code, f"Created project: {p_name}")
+                    st.success(f"✅ Project '{p_name}' successfully created!")
+                    st.rerun()
+                except sqlite3.IntegrityError:
+                    st.error(f"⚠️ Project Code '{p_code}' already exists. Please use a unique code.")
+                except Exception as e:
+                    st.error(f"Error saving project: {e}")
+
+# TAB 3: DOCUMENT REPOSITORY
+with tab_docs:
+    st.subheader("📄 Upload & Attach Project Documents")
+    
+    if not df.empty:
+        selected_proj_code = st.selectbox("Select Target Project Code", df["project_code"].unique())
+        uploaded_file = st.file_uploader("Upload Project Specification / Tender PDF", type=["pdf", "docx", "xlsx"])
+
+        if st.button("Upload Document") and uploaded_file and selected_proj_code:
+            os.makedirs("uploads", exist_ok=True)
+            save_path = os.path.join("uploads", uploaded_file.name)
+            with open(save_path, "wb") as f:
+                f.write(uploaded_file.getbuffer())
+
+            conn = sqlite3.connect("nyeri_public_works.db")
+            cursor = conn.cursor()
+            timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            cursor.execute(
+                "INSERT INTO documents (project_code, filename, file_path, uploaded_by, upload_timestamp) VALUES (?, ?, ?, ?, ?)",
+                (selected_proj_code, uploaded_file.name, save_path, st.session_state["username"], timestamp)
             )
-            fig_status.update_layout(margin=dict(t=20, b=20))
-            st.plotly_chart(fig_status, use_container_width=True)
-        else:
-            st.info("No status data column found.")
+            conn.commit()
+            conn.close()
 
-    # --- GIS INTERACTIVE NYERI MAP ---
-    st.subheader("🗺️ Nyeri County Project GIS Map")
+            log_audit_action(st.session_state["username"], "Document Upload", selected_proj_code, f"Uploaded: {uploaded_file.name}")
+            st.success(f"📎 Document '{uploaded_file.name}' attached to project '{selected_proj_code}' successfully!")
+    else:
+        st.info("No projects available to attach documents to.")
 
-    NYERI_COORDINATES = {
-        "mathira east": (-0.4812, 37.1281), "mathira west": (-0.4285, 37.0600),
-        "othaya": (-0.5439, 36.9472), "othaya central": (-0.5439, 36.9472),
-        "mukurweini": (-0.5606, 37.0483), "tetu": (-0.4350, 36.8833),
-        "nyeri town": (-0.4201, 36.9476), "karatina": (-0.4812, 37.1281),
-        "kieni east": (-0.1500, 37.0500), "kieni west": (-0.2800, 36.8500),
-    }
-
-    def assign_coordinates(row):
-        loc_str = ""
-        if subcounty_col and row.get(subcounty_col): loc_str += str(row.get(subcounty_col)).lower()
-        if name_col and row.get(name_col): loc_str += " " + str(row.get(name_col)).lower()
-
-        for key, coords in NYERI_COORDINATES.items():
-            if key in loc_str: return coords
-        return (-0.4201, 36.9476) 
-
-    map_df = filtered_df.copy()
-    coords = map_df.apply(assign_coordinates, axis=1)
-    map_df["latitude"] = [c[0] for c in coords]
-    map_df["longitude"] = [c[1] for c in coords]
-
-    np.random.seed(42)
-    map_df["latitude"] += np.random.uniform(-0.008, 0.008, size=len(map_df))
-    map_df["longitude"] += np.random.uniform(-0.008, 0.008, size=len(map_df))
-
-    hover_cols = {c: True for c in [dept_col, status_col] if c}
-    if budget_col: hover_cols[budget_col] = ":,.2f"
-    hover_cols["latitude"] = False
-    hover_cols["longitude"] = False
-
-    fig_map = px.scatter_mapbox(
-        map_df, lat="latitude", lon="longitude", hover_name=name_col,
-        hover_data=hover_cols, color=status_col if status_col else None,
-        zoom=9.5, center={"lat": -0.4201, "lon": 36.9476}, height=450,
-    )
-    fig_map.update_layout(mapbox_style="open-street-map", margin={"r": 0, "t": 10, "l": 0, "b": 10})
-    st.plotly_chart(fig_map, use_container_width=True)
-
-    # --- FULL TABLE ---
-    st.subheader("Project Details Table")
-    st.dataframe(filtered_df, use_container_width=True)
-
-else:
-    st.warning("No project data found. The new Enterprise Database is ready for data entry.")
-
-# --- 9. LIVE AUDIT TRAIL FEED ---
-st.markdown("---")
-st.subheader("🔐 System Audit Trail (Recent Activity)")
-audit_df = fetch_audit_logs()
-if not audit_df.empty:
-    st.dataframe(audit_df, use_container_width=True, hide_index=True)
-else:
-    st.info("No audit logs available yet.")
+# TAB 4: SYSTEM AUDIT TRAIL
+with tab_audit:
+    st.subheader("🔐 System Audit Logs")
+    audit_df = fetch_audit_logs()
+    if not audit_df.empty:
+        st.dataframe(audit_df, use_container_width=True, hide_index=True)
+    else:
+        st.info("No audit logs recorded yet.")
