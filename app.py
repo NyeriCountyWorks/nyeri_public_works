@@ -9,7 +9,7 @@ import streamlit as st
 
 
 # ==========================================
-# 1. DATABASE SCHEMA & DEEP SEEDING
+# 1. DATABASE SCHEMA & SEEDING WITH WORKFLOW PIPELINE
 # ==========================================
 def init_enterprise_db():
     try:
@@ -32,7 +32,7 @@ def init_enterprise_db():
             cursor.execute("INSERT INTO users (username, password, full_name, role) VALUES ('director', 'dir123', 'Dr. Lucy Wambui', 'Director')")
             cursor.execute("INSERT INTO users (username, password, full_name, role) VALUES ('chief', 'chief123', 'Hon. Joseph Maina', 'Chief Officer')")
 
-        # 2. Projects
+        # 2. Projects (Updated with Lifecycle Stage)
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS projects (
                 project_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -40,13 +40,13 @@ def init_enterprise_db():
                 project_name TEXT NOT NULL,
                 sub_county TEXT,
                 department TEXT,
-                contractor TEXT DEFAULT 'County In-House',
+                contractor TEXT DEFAULT 'Unassigned',
                 lead_engineer TEXT DEFAULT 'Eng. John Mwangi',
                 budget_allocated REAL,
                 actual_spend REAL DEFAULT 0.0,
                 percentage_complete INTEGER DEFAULT 0,
-                workflow_stage TEXT DEFAULT 'Project Officer Review', 
-                status TEXT DEFAULT 'Active',
+                workflow_stage TEXT DEFAULT '1. Project Draft', 
+                status TEXT DEFAULT '🔵 Planning',
                 start_date TEXT,
                 target_completion TEXT,
                 description TEXT
@@ -55,12 +55,12 @@ def init_enterprise_db():
 
         if cursor.execute("SELECT COUNT(*) FROM projects").fetchone()[0] == 0:
             sample_projects = [
-                ("PRJ-2026-001", "Karatina Market Modernization & Drainage", "Mathira East", "Infrastructure & Energy", "Apex Builders Ltd", "Eng. David Kariuki", 45000000.0, 38000000.0, 85, "Director Review", "Active", "2026-01-15", "2026-09-30", "Upgrade of Karatina market drainage and paved stalls."),
-                ("PRJ-2026-002", "Othaya Sub-County Hospital Wing Extension", "Othaya", "Health Services", "Mount Kenya Construction", "Eng. John Mwangi", 60000000.0, 60000000.0, 100, "Approved", "Completed", "2025-06-01", "2026-05-15", "Construction of 60-bed ward extension and maternity theater."),
-                ("PRJ-2026-003", "Tetu High-Altitude Training Water Pipeline", "Tetu", "Water & Sanitation", "Aberdare Water Systems", "Eng. Grace Nderitu", 18500000.0, 12000000.0, 65, "County Engineer Signoff", "Active", "2026-02-10", "2026-11-20", "Pipeline extension connecting Ihururu water plant to training center."),
-                ("PRJ-2026-004", "Mukurwe-ini Feeder Roads Tarmacking", "Mukurweini", "Roads & Transport", "Highland Civils Ltd", "Eng. Peter Kamau", 82000000.0, 25000000.0, 30, "Project Officer Review", "Delayed", "2026-03-01", "2026-12-31", "Tarmacking 12km feeder roads connecting local farms to highway."),
-                ("PRJ-2026-005", "Nyeri Town Bus Park Stormwater System", "Nyeri Town", "Public Works", "County In-House", "Eng. John Mwangi", 12000000.0, 1500000.0, 15, "Project Officer Review", "Active", "2026-05-01", "2026-10-15", "Rehabilitation of central bus park drainage culverts."),
-                ("PRJ-2026-006", "Kieni East Earth Dam Rehabilitation", "Kieni East", "Water & Sanitation", "Rift Valley Hydraulics", "Eng. Grace Nderitu", 35000000.0, 32000000.0, 90, "Chief Officer Approval", "Active", "2025-11-01", "2026-08-15", "Desilting dam reservoir and constructing spillway concrete wall.")
+                ("PRJ-2026-001", "Karatina Market Modernization & Drainage", "Mathira East", "Infrastructure & Energy", "Apex Builders Ltd", "Eng. David Kariuki", 45000000.0, 38000000.0, 85, "4. Director Review", "🟠 In Progress", "2026-01-15", "2026-09-30", "Upgrade of Karatina market drainage and paved stalls."),
+                ("PRJ-2026-002", "Othaya Sub-County Hospital Wing Extension", "Othaya", "Health Services", "Mount Kenya Construction", "Eng. John Mwangi", 60000000.0, 60000000.0, 100, "10. Completion", "🟢 Completed", "2025-06-01", "2026-05-15", "Construction of 60-bed ward extension and maternity theater."),
+                ("PRJ-2026-003", "Tetu High-Altitude Training Water Pipeline", "Tetu", "Water & Sanitation", "Aberdare Water Systems", "Eng. Grace Nderitu", 18500000.0, 12000000.0, 65, "7. Construction", "🟠 In Progress", "2026-02-10", "2026-11-20", "Pipeline extension connecting Ihururu water plant to training center."),
+                ("PRJ-2026-004", "Mukurwe-ini Feeder Roads Tarmacking", "Mukurweini", "Roads & Transport", "Highland Civils Ltd", "Eng. Peter Kamau", 82000000.0, 25000000.0, 30, "3. Engineer Review", "🔴 Delayed", "2026-03-01", "2026-12-31", "Tarmacking 12km feeder roads connecting local farms to highway."),
+                ("PRJ-2026-005", "Nyeri Town Bus Park Stormwater System", "Nyeri Town", "Public Works", "County In-House", "Eng. John Mwangi", 12000000.0, 1500000.0, 15, "2. Upload BOQ", "🔵 Planning", "2026-05-01", "2026-10-15", "Rehabilitation of central bus park drainage culverts."),
+                ("PRJ-2026-006", "Kieni East Earth Dam Rehabilitation", "Kieni East", "Water & Sanitation", "Rift Valley Hydraulics", "Eng. Grace Nderitu", 35000000.0, 32000000.0, 90, "8. Field Inspection", "🟠 In Progress", "2025-11-01", "2026-08-15", "Desilting dam reservoir and constructing spillway concrete wall.")
             ]
             cursor.executemany("""
                 INSERT INTO projects 
@@ -76,17 +76,13 @@ def init_enterprise_db():
                 stage TEXT,
                 approver_name TEXT,
                 approver_role TEXT,
-                action TEXT, -- 'Approved', 'Rejected', 'Escalated'
+                action TEXT,
                 comments TEXT,
                 timestamp DATETIME
             )
         ''')
 
-        if cursor.execute("SELECT COUNT(*) FROM approval_history").fetchone()[0] == 0:
-            cursor.execute("INSERT INTO approval_history (project_code, stage, approver_name, approver_role, action, comments, timestamp) VALUES ('PRJ-2026-001', 'Project Officer Review', 'Eng. David Kariuki', 'Project Officer', 'Approved', 'Initial site inspection complete. Proceed.', '2026-06-10 10:15:00')")
-            cursor.execute("INSERT INTO approval_history (project_code, stage, approver_name, approver_role, action, comments, timestamp) VALUES ('PRJ-2026-001', 'County Engineer Signoff', 'Eng. John Mwangi', 'County Engineer', 'Approved', 'Engineering specs verified.', '2026-07-01 14:20:00')")
-
-        # 4. Document Versions & Metadata
+        # 4. Document Versions
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS document_repository (
                 doc_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -100,30 +96,30 @@ def init_enterprise_db():
             )
         ''')
 
-        if cursor.execute("SELECT COUNT(*) FROM document_repository").fetchone()[0] == 0:
-            cursor.execute("INSERT INTO document_repository (project_code, doc_name, version, doc_type, status, uploaded_by, upload_date) VALUES ('PRJ-2026-001', 'Karatina_Market_Tender_BOQ.pdf', 'v2.1', 'PDF', 'Approved', 'Eng. David Kariuki', '2026-06-12 09:30:00')")
-            cursor.execute("INSERT INTO document_repository (project_code, doc_name, version, doc_type, status, uploaded_by, upload_date) VALUES ('PRJ-2026-001', 'Structural_Drawing_Drainage.pdf', 'v1.0', 'PDF', 'Approved', 'Apex Builders Ltd', '2026-06-15 11:00:00')")
-            cursor.execute("INSERT INTO document_repository (project_code, doc_name, version, doc_type, status, uploaded_by, upload_date) VALUES ('PRJ-2026-004', 'Road_Gradients_Survey.xlsx', 'v1.2', 'Spreadsheet', 'Pending Review', 'Highland Civils Ltd', '2026-07-10 16:45:00')")
-
         # 5. Interactive Notifications Table
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS notifications (
                 notif_id INTEGER PRIMARY KEY AUTOINCREMENT,
                 project_code TEXT,
-                type TEXT, -- 'Warning', 'Approval Needed', 'Info'
+                type TEXT,
                 title TEXT,
                 message TEXT,
-                status TEXT DEFAULT 'Unread', -- 'Unread', 'Dismissed'
+                status TEXT DEFAULT 'Unread',
                 timestamp DATETIME
             )
         ''')
 
         if cursor.execute("SELECT COUNT(*) FROM notifications").fetchone()[0] == 0:
-            cursor.execute("INSERT INTO notifications (project_code, type, title, message, status, timestamp) VALUES ('PRJ-2026-004', 'Warning', 'Schedule Variance Alert', 'Mukurwe-ini Feeder Roads is delayed by 35 days.', 'Unread', '2026-07-21 08:30:00')")
+            cursor.execute("INSERT INTO notifications (project_code, type, title, message, status, timestamp) VALUES ('PRJ-2026-004', 'Warning', 'Budget & Schedule Variance Alert', 'Mukurwe-ini Feeder Roads is delayed by 35 days.', 'Unread', '2026-07-21 08:30:00')")
             cursor.execute("INSERT INTO notifications (project_code, type, title, message, status, timestamp) VALUES ('PRJ-2026-001', 'Approval Needed', 'Director Signoff Pending', 'Karatina Market Modernization requires executive signoff.', 'Unread', '2026-07-21 11:00:00')")
 
-        # 6. Audit Trail
+        # 6. Audit Trail & Real-time Activity Log
         cursor.execute('''CREATE TABLE IF NOT EXISTS audit_logs (log_id INTEGER PRIMARY KEY AUTOINCREMENT, timestamp DATETIME, username TEXT, action TEXT, target_record TEXT, details TEXT)''')
+        
+        if cursor.execute("SELECT COUNT(*) FROM audit_logs").fetchone()[0] == 0:
+            cursor.execute("INSERT INTO audit_logs (timestamp, username, action, target_record, details) VALUES ('2026-07-21 09:20:00', 'eng123', 'Project Update', 'PRJ-2026-004', 'Eng. Peter Kamau updated construction progress logs.')")
+            cursor.execute("INSERT INTO audit_logs (timestamp, username, action, target_record, details) VALUES ('2026-07-21 10:05:00', 'dir123', 'Workflow Approval', 'PRJ-2026-001', 'Dr. Lucy Wambui approved BOQ documentation.')")
+            cursor.execute("INSERT INTO audit_logs (timestamp, username, action, target_record, details) VALUES ('2026-07-21 10:42:00', 'admin', 'Budget Reallocation', 'PRJ-2026-003', 'Approved contingency expenditure adjustment of KES 1.2M.')")
 
         conn.commit()
         conn.close()
@@ -175,7 +171,7 @@ def format_currency_short(val):
 
 
 # ==========================================
-# 2. CUSTOM STYLES
+# 2. CUSTOM STYLES & COLOR SCHEME
 # ==========================================
 def inject_custom_styles():
     st.markdown("""
@@ -189,35 +185,25 @@ def inject_custom_styles():
             color: #FFFFFF !important;
             font-family: 'Inter', sans-serif;
         }
-        .kpi-card {
-            background: #FFFFFF; border-radius: 12px; padding: 18px 20px; border: 1px solid #E5E7EB;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); margin-bottom: 15px;
+        
+        /* Decision Center Cards */
+        .dec-card {
+            background: #FFFFFF; border-radius: 10px; padding: 16px 18px; border: 1px solid #E5E7EB;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); text-align: left;
         }
-        .kpi-title { font-size: 13px; font-weight: 600; color: #6B7280; text-transform: uppercase; }
-        .kpi-value { font-size: 26px; font-weight: 800; color: #111827; margin: 4px 0; }
-        .kpi-badge-up { color: #10B981; font-size: 12px; font-weight: 700; background: #ECFDF5; padding: 2px 8px; border-radius: 20px; }
-        .kpi-badge-down { color: #EF4444; font-size: 12px; font-weight: 700; background: #FEF2F2; padding: 2px 8px; border-radius: 20px; }
+        .dec-title { font-size: 12px; font-weight: 700; color: #6B7280; text-transform: uppercase; letter-spacing: 0.5px; }
+        .dec-value { font-size: 24px; font-weight: 800; color: #111827; margin: 4px 0; }
+        .dec-sub { font-size: 11px; font-weight: 600; }
+        
+        .status-completed { color: #10B981; background: #ECFDF5; padding: 2px 8px; border-radius: 12px; font-weight:700; font-size:12px; }
+        .status-progress { color: #F59E0B; background: #FEF3C7; padding: 2px 8px; border-radius: 12px; font-weight:700; font-size:12px; }
+        .status-delayed { color: #EF4444; background: #FEF2F2; padding: 2px 8px; border-radius: 12px; font-weight:700; font-size:12px; }
+        .status-planning { color: #3B82F6; background: #EFF6FF; padding: 2px 8px; border-radius: 12px; font-weight:700; font-size:12px; }
 
-        /* Stepper Visualizer */
-        .stepper-wrapper { display: flex; justify-content: space-between; margin: 20px 0; }
-        .stepper-item { flex: 1; text-align: center; position: relative; }
-        .stepper-item::after {
-            content: ''; position: absolute; top: 18px; left: 50%; width: 100%; height: 3px; background-color: #E5E7EB; z-index: 1;
-        }
-        .stepper-item:last-child::after { content: none; }
-        .stepper-circle {
-            width: 36px; height: 36px; border-radius: 50%; background-color: #E5E7EB; color: #6B7280;
-            display: flex; align-items: center; justify-content: center; margin: 0 auto 8px auto; font-weight: bold; position: relative; z-index: 2;
-        }
-        .stepper-complete .stepper-circle { background-color: #10B981; color: white; }
-        .stepper-active .stepper-circle { background-color: #D4AF37; color: white; box-shadow: 0 0 0 4px #FEF3C7; }
-        .stepper-title { font-size: 12px; font-weight: 600; color: #374151; }
-
-        .notif-box {
-            padding: 14px; border-radius: 8px; background: #FFFFFF; border-left: 5px solid #0A4D20; border-top: 1px solid #E5E7EB; border-right: 1px solid #E5E7EB; border-bottom: 1px solid #E5E7EB; margin-bottom: 12px;
-        }
-        .notif-warning { border-left-color: #EF4444 !important; }
-        .notif-approval { border-left-color: #D4AF37 !important; }
+        /* Timeline feed */
+        .timeline-item { padding: 10px 0; border-bottom: 1px solid #F3F4F6; }
+        .timeline-time { font-size: 11px; font-weight: 700; color: #0A4D20; }
+        .timeline-desc { font-size: 13px; color: #374151; margin-top: 2px; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -233,7 +219,7 @@ if "authenticated" not in st.session_state: st.session_state["authenticated"] = 
 if "is_public" not in st.session_state: st.session_state["is_public"] = False
 if "selected_project_code" not in st.session_state: st.session_state["selected_project_code"] = None
 
-# --- UNAUTHENTICATED & PUBLIC PORTAL GATE ---
+# --- UNAUTHENTICATED / CITIZEN GATE ---
 if not st.session_state["authenticated"] and not st.session_state["is_public"]:
     st.markdown("<h1 style='text-align: center; color: #0A4D20;'>🏛️ County Government of Nyeri</h1>", unsafe_allow_html=True)
     st.markdown("<h3 style='text-align: center; color: #D4AF37; margin-top: -15px;'>Public Works & Infrastructure MIS Portal</h3>", unsafe_allow_html=True)
@@ -268,7 +254,7 @@ if not st.session_state["authenticated"] and not st.session_state["is_public"]:
 
 
 # ==========================================
-# 4. CITIZEN PUBLIC PORTAL (UNAUTHENTICATED)
+# 4. CITIZEN PUBLIC PORTAL
 # ==========================================
 if st.session_state["is_public"]:
     st.markdown("""
@@ -299,16 +285,13 @@ if st.session_state["is_public"]:
     if search_kw: filtered_df = filtered_df[filtered_df["project_name"].str.contains(search_kw, case=False)]
 
     with p2:
-        st.subheader(f"Public Projects ({len(filtered_df)})")
-        
-        # Format currency for table preview
+        st.subheader(f"Public Infrastructure Projects ({len(filtered_df)})")
         display_public = filtered_df.copy()
         display_public["budget_allocated"] = display_public["budget_allocated"].apply(lambda x: f"KES {x:,.2f}")
         display_public["percentage_complete"] = display_public["percentage_complete"].apply(lambda x: f"{x}%")
         
         st.dataframe(display_public, use_container_width=True, hide_index=True)
 
-        # Public Report Export
         csv_data = filtered_df.to_csv(index=False).encode('utf-8')
         st.download_button(
             label="📥 Download Public Transparency Report (CSV)",
@@ -320,7 +303,32 @@ if st.session_state["is_public"]:
 
 
 # ==========================================
-# 5. ENTERPRISE SIDEBAR NAVIGATION
+# 5. GLOBAL TOP HEADER (SEARCH + NOTIFICATIONS)
+# ==========================================
+df = fetch_df("SELECT * FROM projects")
+
+h1, h2, h3 = st.columns([3, 1, 1])
+with h1:
+    search_query = st.text_input("🔍 Global Search (Project, Contractor, Engineer, Sub-County)...", key="global_search")
+with h2:
+    st.markdown("<div style='margin-top: 28px;'></div>", unsafe_allow_html=True)
+    unread_cnt = len(fetch_df("SELECT * FROM notifications WHERE status = 'Unread'"))
+    with st.expander(f"🔔 Notifications ({unread_cnt})"):
+        notif_data = fetch_df("SELECT * FROM notifications WHERE status = 'Unread'")
+        if notif_data.empty:
+            st.write("No unread alerts.")
+        else:
+            for _, n in notif_data.iterrows():
+                st.markdown(f"**{n['title']}**\n\n{n['message']}")
+                st.divider()
+with h3:
+    st.markdown(f"<div style='margin-top: 28px; text-align:right;'><strong>{st.session_state['full_name']}</strong><br/><span style='font-size:12px; color:#6B7280;'>{st.session_state['role']}</span></div>", unsafe_allow_html=True)
+
+st.markdown("---")
+
+
+# ==========================================
+# 6. ENTERPRISE SIDEBAR WITH ICONS
 # ==========================================
 st.sidebar.markdown(f"""
 <div style="text-align: center; padding: 10px 0;">
@@ -330,22 +338,18 @@ st.sidebar.markdown(f"""
 <hr style="border: 0; border-top: 1px solid rgba(255, 255, 255, 0.15); margin-bottom: 15px;" />
 """, unsafe_allow_html=True)
 
-st.sidebar.markdown(f"👤 User: **{st.session_state['full_name']}**")
-st.sidebar.markdown(f"🛡️ Role: **{st.session_state['role']}**")
-st.sidebar.markdown("---")
-
 nav_choice = st.sidebar.radio(
-    "SYSTEM MODULES",
+    "NAVIGATION MODULES",
     [
-        "🏠 Executive Home",
-        "📂 Projects Portfolio",
+        "🏠 Executive Decision Centre",
+        "📁 Projects Portfolio",
         "🔎 Project Details Inspector",
-        "🔄 Workflow Approval Engine",
-        "📄 Documents & Versions",
-        "📈 Deep Analytics & Forecasting",
+        "🔄 End-to-End Workflow Pipeline",
+        "📄 Documents & Versioning",
+        "📊 Deep Analytics & Forecasting",
         "🔔 Interactive Notifications",
-        "🤖 Ask Nyeri AI (Dynamic SQL)",
-        "⚙️ System Audit Trail"
+        "🤖 Ask Nyeri AI Assistant",
+        "⚙️ Settings & System Audit Trail"
     ]
 )
 
@@ -354,63 +358,143 @@ if st.sidebar.button("Logout"):
     st.session_state["authenticated"] = False
     st.rerun()
 
-df = fetch_df("SELECT * FROM projects")
+
+# ==========================================
+# GLOBAL SEARCH OVERRIDE
+# ==========================================
+if search_query:
+    st.subheader(f"🔎 Global Search Results for: '{search_query}'")
+    s_results = df[
+        df["project_name"].str.contains(search_query, case=False) |
+        df["contractor"].str.contains(search_query, case=False) |
+        df["lead_engineer"].str.contains(search_query, case=False) |
+        df["sub_county"].str.contains(search_query, case=False)
+    ]
+    st.dataframe(s_results, use_container_width=True)
+    st.stop()
 
 
 # ==========================================
-# MODULE 1: EXECUTIVE HOME
+# MODULE 1: EXECUTIVE DECISION CENTRE
 # ==========================================
-if nav_choice == "🏠 Executive Home":
-    st.markdown(f"## ☀️ Welcome, {st.session_state['full_name']}")
-    st.caption(f"Portfolio Overview as of {datetime.datetime.now().strftime('%B %d, %Y')}")
-
-    tot_b = df["budget_allocated"].sum()
-    tot_s = df["actual_spend"].sum()
+if nav_choice == "🏠 Executive Decision Centre":
     
-    col1, col2, col3, col4 = st.columns(4)
-    with col1:
-        st.markdown(f'<div class="kpi-card"><div class="kpi-title">Total Projects</div><div class="kpi-value">{len(df)}</div><span class="kpi-badge-up">▲ Active County Portfolio</span></div>', unsafe_allow_html=True)
-    with col2:
-        st.markdown(f'<div class="kpi-card"><div class="kpi-title">Allocated Budget</div><div class="kpi-value">{format_currency_short(tot_b)}</div><span class="kpi-badge-up">Total Funds</span></div>', unsafe_allow_html=True)
-    with col3:
-        st.markdown(f'<div class="kpi-card"><div class="kpi-title">Total Spend</div><div class="kpi-value">{format_currency_short(tot_s)}</div><span class="kpi-badge-up">{(tot_s/tot_b*100):.1f}% Utilized</span></div>', unsafe_allow_html=True)
-    with col4:
-        delayed = len(df[df["status"]=="Delayed"])
-        st.markdown(f'<div class="kpi-card"><div class="kpi-title">Delayed Projects</div><div class="kpi-value">{delayed}</div><span class="kpi-badge-down">▼ Action Required</span></div>', unsafe_allow_html=True)
+    # ⚡ QUICK ACTIONS BAR
+    q1, q2, q3, q4 = st.columns(4)
+    with q1:
+        with st.popover("➕ New Project"):
+            with st.form("quick_new_prj"):
+                np_code = st.text_input("Project Code", f"PRJ-2026-00{len(df)+1}")
+                np_name = st.text_input("Project Name")
+                np_sc = st.selectbox("Sub-County", ["Mathira East", "Othaya", "Tetu", "Mukurweini", "Nyeri Town", "Kieni East"])
+                np_dept = st.selectbox("Department", ["Infrastructure & Energy", "Health Services", "Water & Sanitation", "Roads & Transport", "Public Works"])
+                np_budget = st.number_input("Allocated Budget (KES)", min_value=100000.0, value=10000000.0)
+                if st.form_submit_button("Submit New Project"):
+                    execute_sql("INSERT INTO projects (project_code, project_name, sub_county, department, budget_allocated, workflow_stage, status, start_date, target_completion) VALUES (?, ?, ?, ?, ?, '1. Project Draft', '🔵 Planning', ?, ?)",
+                                (np_code, np_name, np_sc, np_dept, np_budget, datetime.date.today().strftime("%Y-%m-%d"), "2026-12-31"))
+                    log_audit_action(st.session_state["username"], "Quick Action", np_code, f"Created new project {np_name}")
+                    st.success("Project initialized!")
+                    st.rerun()
+    with q2:
+        with st.popover("📄 Upload BOQ / Document"):
+            st.write("Quick upload tender document or BOQ spreadsheet directly to repository.")
+            u_p = st.selectbox("Select Target Project", df["project_code"].unique())
+            u_f = st.file_uploader("Choose BOQ File")
+            if st.button("Upload to Pipeline"):
+                if u_f:
+                    execute_sql("INSERT INTO document_repository (project_code, doc_name, version, doc_type, status, uploaded_by, upload_date) VALUES (?, ?, 'v1.0', 'BOQ PDF', 'Approved', ?, ?)",
+                                (u_p, u_f.name, st.session_state["full_name"], datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
+                    st.success("Document attached!")
+    with q3:
+        if st.button("📊 Generate Executive Report", use_container_width=True):
+            st.info("Executive Report generated and queued for download.")
+    with q4:
+        with st.popover("👤 Assign Lead Engineer"):
+            a_p = st.selectbox("Select Project Code", df["project_code"].unique(), key="assign_p")
+            a_e = st.selectbox("Select Lead Engineer", ["Eng. John Mwangi", "Eng. David Kariuki", "Eng. Grace Nderitu", "Eng. Peter Kamau"])
+            if st.button("Assign Engineer"):
+                execute_sql("UPDATE projects SET lead_engineer = ? WHERE project_code = ?", (a_e, a_p))
+                log_audit_action(st.session_state["username"], "Assign Engineer", a_p, f"Assigned to {a_e}")
+                st.success("Engineer assigned successfully!")
 
-    g1, g2 = st.columns([1, 1])
-    with g1:
-        st.subheader("Department Budget Allocation")
-        fig_dept = px.pie(df, names="department", values="budget_allocated", hole=0.4, color_discrete_sequence=px.colors.qualitative.Set2)
-        st.plotly_chart(fig_dept, use_container_width=True)
-    with g2:
-        st.subheader("Sub-County Completion Rates (%)")
-        sc_comp = df.groupby("sub_county")["percentage_complete"].mean().reset_index()
-        fig_sc = px.bar(sc_comp, x="sub_county", y="percentage_complete", color="percentage_complete", color_continuous_scale="Greens")
-        st.plotly_chart(fig_sc, use_container_width=True)
+    st.markdown("<div style='margin-top: 15px;'></div>", unsafe_allow_html=True)
+
+    # 🏛️ DECISION CENTER METRICS (6 KPI RISK CARDS)
+    req_approvals = len(df[df["workflow_stage"].str.contains("Review|Approval")])
+    delayed_cnt = len(df[df["status"] == "🔴 Delayed"])
+    tot_budget_risk = df[df["status"] == "🔴 Delayed"]["budget_allocated"].sum()
+    
+    m1, m2, m3, m4, m5, m6 = st.columns(6)
+    with m1:
+        st.markdown(f'<div class="dec-card"><div class="dec-title">Awaiting Approval</div><div class="dec-value">{req_approvals}</div><span class="dec-sub status-progress">Action Needed</span></div>', unsafe_allow_html=True)
+    with m2:
+        st.markdown(f'<div class="dec-card"><div class="dec-title">Budget at Risk</div><div class="dec-value">{format_currency_short(tot_budget_risk)}</div><span class="dec-sub status-delayed">Delayed Capital</span></div>', unsafe_allow_html=True)
+    with m3:
+        st.markdown(f'<div class="dec-card"><div class="dec-title">Delayed Projects</div><div class="dec-value">{delayed_cnt}</div><span class="dec-sub status-delayed">Schedule Variance</span></div>', unsafe_allow_html=True)
+    with m4:
+        st.markdown(f'<div class="dec-card"><div class="dec-title">High-Risk Contractors</div><div class="dec-value">1</div><span class="dec-sub status-delayed">Highland Civils</span></div>', unsafe_allow_html=True)
+    with m5:
+        st.markdown(f'<div class="dec-card"><div class="dec-title">Pending Documents</div><div class="dec-value">3</div><span class="dec-sub status-planning">BOQs Awaiting Signoff</span></div>', unsafe_allow_html=True)
+    with m6:
+        st.markdown(f'<div class="dec-card"><div class="dec-title">Upcoming Deadlines</div><div class="dec-value">2</div><span class="dec-sub status-progress">Due within 30 Days</span></div>', unsafe_allow_html=True)
+
+    st.markdown("<div style='margin-top: 20px;'></div>", unsafe_allow_html=True)
+
+    # 🧠 AI EXECUTIVE SUMMARY BRIEFING
+    st.info(f"""
+    🧠 **Today's Executive Operational Briefing:**
+    - **Critical Bottlenecks:** **{delayed_cnt} project(s)** are currently behind schedule with **{format_currency_short(tot_budget_risk)}** in delayed capital.
+    - **Pending Authorizations:** **{req_approvals} project approval(s)** are awaiting Director/Chief Officer sign-off in the pipeline.
+    - **Departmental Expenditure:** **Roads & Transport** has registered the highest monthly budget utilization rate (78%), while **Water & Sanitation** leads in overall completion percentage (77.5%).
+    """)
+
+    # DECISION VISUALS & RECENT ACTIVITY FEED
+    c_left, c_right = st.columns([2, 1])
+    with c_left:
+        st.subheader("📊 Capital Allocation & Progress Overview")
+        fig_main = px.scatter(df, x="percentage_complete", y="budget_allocated", size="budget_allocated", color="status",
+                             hover_name="project_name", text="project_code",
+                             color_discrete_map={"🟢 Completed":"#10B981", "🟠 In Progress":"#F59E0B", "🔴 Delayed":"#EF4444", "🔵 Planning":"#3B82F6"})
+        st.plotly_chart(fig_main, use_container_width=True)
+
+    with c_right:
+        st.subheader("🕒 Recent Activity Feed")
+        activities = fetch_df("SELECT timestamp, username, action, details FROM audit_logs ORDER BY log_id DESC LIMIT 5")
+        for _, act in activities.iterrows():
+            st.markdown(f"""
+            <div class="timeline-item">
+                <div class="timeline-time">⏱️ {act['timestamp']} - {act['username']}</div>
+                <div class="timeline-desc"><strong>{act['action']}:</strong> {act['details']}</div>
+            </div>
+            """, unsafe_allow_html=True)
 
 
 # ==========================================
 # MODULE 2: PROJECTS PORTFOLIO
 # ==========================================
-elif nav_choice == "📂 Projects Portfolio":
-    st.subheader("📂 Infrastructure Projects Portfolio")
+elif nav_choice == "📁 Projects Portfolio":
+    st.subheader("📁 Infrastructure Projects Portfolio")
     
-    st.dataframe(df[["project_code", "project_name", "sub_county", "department", "contractor", "budget_allocated", "percentage_complete", "workflow_stage", "status"]], use_container_width=True)
+    # Styled Table Preview with Color Coding
+    display_df = df[["project_code", "project_name", "sub_county", "department", "contractor", "budget_allocated", "percentage_complete", "workflow_stage", "status"]].copy()
+    display_df["budget_allocated"] = display_df["budget_allocated"].apply(lambda x: f"KES {x:,.2f}")
+    display_df["percentage_complete"] = display_df["percentage_complete"].apply(lambda x: f"{x}%")
+    
+    st.dataframe(display_df, use_container_width=True, hide_index=True)
 
     st.markdown("---")
-    st.write("👉 **Click below to inspect a project in depth:**")
-    selected_code = st.selectbox("Select Project Code to Inspect", df["project_code"].unique())
-    if st.button("Open Full Project Inspector ➔"):
+    st.write("👉 **Inspect a project in depth:**")
+    selected_code = st.selectbox("Select Project Code", df["project_code"].unique())
+    if st.button("Open Project Inspector ➔"):
         st.session_state["selected_project_code"] = selected_code
         st.rerun()
 
 
 # ==========================================
-# MODULE 3: PROJECT DETAILS INSPECTOR (DRILL-DOWN)
+# MODULE 3: PROJECT DETAILS INSPECTOR
 # ==========================================
 elif nav_choice == "🔎 Project Details Inspector":
-    st.subheader("🔎 Deep Project Details Inspector")
+    st.subheader("🔎 Project Details Inspector")
 
     p_code = st.session_state.get("selected_project_code") or df["project_code"].iloc[0]
     p_code_input = st.selectbox("Select Active Project", df["project_code"].unique(), index=int(df[df["project_code"]==p_code].index[0]) if p_code in df["project_code"].values else 0)
@@ -418,13 +502,13 @@ elif nav_choice == "🔎 Project Details Inspector":
     p_info = df[df["project_code"] == p_code_input].iloc[0]
 
     st.markdown(f"### 🏗️ {p_info['project_name']} (`{p_info['project_code']}`)")
+    st.markdown(f"Status: **{p_info['status']}** | Stage: **{p_info['workflow_stage']}**")
     
-    d_tab1, d_tab2, d_tab3, d_tab4, d_tab5 = st.tabs([
-        "📋 Overview & Timeline",
-        "🔄 Approval Workflow Log",
-        "📄 Documents & Preview",
-        "📷 Inspections & Photos",
-        "🤖 AI Summary"
+    d_tab1, d_tab2, d_tab3, d_tab4 = st.tabs([
+        "📋 Overview & Budget",
+        "🔄 Workflow History",
+        "📄 BOQ Documents & Previews",
+        "📷 Field Inspections"
     ])
 
     with d_tab1:
@@ -436,140 +520,137 @@ elif nav_choice == "🔎 Project Details Inspector":
         o3.write(f"**Start Date:** {p_info['start_date']}")
         o3.write(f"**Target Completion:** {p_info['target_completion']}")
 
-        st.markdown("#### Progress & Expenditure")
+        st.markdown("#### Progress & Expenditure Balance")
         st.progress(p_info['percentage_complete']/100)
-        st.write(f"**Completion:** {p_info['percentage_complete']}% | **Allocated Budget:** {format_currency_short(p_info['budget_allocated'])} | **Actual Spend:** {format_currency_short(p_info['actual_spend'])}")
+        st.write(f"**Completion Rate:** {p_info['percentage_complete']}% | **Allocated Budget:** {format_currency_short(p_info['budget_allocated'])} | **Actual Spend:** {format_currency_short(p_info['actual_spend'])}")
 
     with d_tab2:
-        st.markdown("#### Formal Workflow Sign-Off Audit Trail")
+        st.markdown("#### Approval Trail Log")
         hist = fetch_df("SELECT stage, approver_name, approver_role, action, comments, timestamp FROM approval_history WHERE project_code = ? ORDER BY approval_id DESC", (p_code_input,))
         if not hist.empty:
             st.dataframe(hist, use_container_width=True)
         else:
-            st.info("No approval actions logged yet.")
+            st.info("No formal governance actions logged yet.")
 
     with d_tab3:
-        st.markdown("#### Associated Contract Documents & Previews")
+        st.markdown("#### Contract Documents & BOQ Repository")
         docs = fetch_df("SELECT doc_name, version, doc_type, status, uploaded_by, upload_date FROM document_repository WHERE project_code = ?", (p_code_input,))
         if not docs.empty:
             st.dataframe(docs, use_container_width=True)
-            
-            # Interactive Mock Document Preview
-            st.markdown("##### 📄 Document Preview Box")
-            doc_to_preview = st.selectbox("Select File to Preview", docs["doc_name"].unique())
-            st.markdown(f"""
-            <div style="border: 2px dashed #0A4D20; padding:20px; background:#F9FAFB; border-radius:8px; text-align:center;">
-                📄 <strong>PREVIEW: {doc_to_preview}</strong><br/>
-                <span style="font-size:12px; color:#6B7280;">Document cryptographically verified & stored on Nyeri County Cloud Repository.</span><br/><br/>
-                <code>[PDF Preview Content: Specifications for {p_info['project_name']} - Approved Version]</code>
-            </div>
-            """, unsafe_allow_html=True)
         else:
             st.info("No documents uploaded for this project yet.")
 
     with d_tab4:
-        st.markdown("#### Site Photo Gallery & Field Inspection Logs")
-        st.image("https://images.unsplash.com/photo-1541888946425-d0fbb186a5b3?auto=format&fit=crop&w=800&q=80", caption=f"Field Inspection Photo - {p_info['project_name']}", width=600)
-
-    with d_tab5:
-        st.markdown("#### 🤖 AI-Generated Project Health Summary")
-        burn_rate = (p_info['actual_spend'] / p_info['budget_allocated'] * 100) if p_info['budget_allocated'] > 0 else 0
-        st.success(f"""
-        **AI Health Assessment for {p_info['project_code']}:**
-        - **Schedule Health:** Project is currently **{p_info['status']}** sitting at stage **{p_info['workflow_stage']}**.
-        - **Budget Burn Rate:** {burn_rate:.1f}% of allocated funds spent against {p_info['percentage_complete']}% completion.
-        - **Risk Level:** {'🔴 High Risk' if p_info['status']=='Delayed' else '🟢 Low/Optimal Risk'}.
-        """)
+        st.markdown("#### Site Photo Inspection Logs")
+        st.image("https://images.unsplash.com/photo-1541888946425-d0fbb186a5b3?auto=format&fit=crop&w=800&q=80", caption=f"Field Inspection Verification - {p_info['project_name']}", width=600)
 
 
 # ==========================================
-# MODULE 4: WORKFLOW APPROVAL ENGINE
+# MODULE 4: CONNECTED END-TO-END WORKFLOW PIPELINE
 # ==========================================
-elif nav_choice == "🔄 Workflow Approval Engine":
-    st.subheader("🔄 Multi-Tier Governance Approval Engine")
+elif nav_choice == "🔄 End-to-End Workflow Pipeline":
+    st.subheader("🔄 Connected Project Lifecycle Management Pipeline")
     
-    stages = ["Project Officer Review", "County Engineer Signoff", "Director Review", "Chief Officer Approval", "Approved"]
+    pipeline_stages = [
+        "1. Project Draft",
+        "2. Upload BOQ",
+        "3. Engineer Review",
+        "4. Director Review",
+        "5. Chief Officer Approval",
+        "6. Tender Award",
+        "7. Construction",
+        "8. Field Inspection",
+        "9. Completion Review",
+        "10. Completion",
+        "11. Published to Citizen Portal"
+    ]
     
-    p_code_app = st.selectbox("Select Project for Formal Approval Action", df["project_code"].unique())
-    p_curr = df[df["project_code"] == p_code_app].iloc[0]
+    p_code_pipe = st.selectbox("Select Project to Advance Lifecycle", df["project_code"].unique())
+    p_curr = df[df["project_code"] == p_code_pipe].iloc[0]
 
-    st.info(f"Current Governance Stage: **{p_curr['workflow_stage']}**")
+    st.info(f"Current Pipeline Stage: **{p_curr['workflow_stage']}** | Status: **{p_curr['status']}**")
 
-    # Stepper Display
-    curr_idx = stages.index(p_curr["workflow_stage"]) if p_curr["workflow_stage"] in stages else 0
-    stepper_html = '<div class="stepper-wrapper">'
-    for i, s_name in enumerate(stages):
-        if i < curr_idx: s_class, icon = "stepper-complete", "✓"
-        elif i == curr_idx: s_class, icon = "stepper-active", "🔄"
-        else: s_class, icon = "", str(i+1)
-        stepper_html += f'<div class="stepper-item {s_class}"><div class="stepper-circle">{icon}</div><div class="stepper-title">{s_name}</div></div>'
-    stepper_html += '</div>'
-    st.markdown(stepper_html, unsafe_allow_html=True)
+    # Stepper Pipeline Display
+    curr_stage_str = str(p_curr['workflow_stage'])
+    curr_idx = 0
+    for idx, stg in enumerate(pipeline_stages):
+        if stg.lower() in curr_stage_str.lower() or curr_stage_str.startswith(stg.split(".")[0]):
+            curr_idx = idx
 
+    st.markdown("#### Project Lifecycle Progress Tracker")
+    st.progress((curr_idx + 1) / len(pipeline_stages))
+    
     st.markdown("---")
-    st.markdown("### ✍️ Authorize / Sign Off Current Stage")
+    st.markdown("### ✍️ Execute Pipeline Governance Action")
 
-    with st.form("approval_signoff_form"):
-        approver_comments = st.text_area("Official Authorization Comments / Observations")
-        approval_action = st.radio("Decision", ["Approve & Advance Stage", "Reject / Escalation Required"], horizontal=True)
+    with st.form("pipeline_advance_form"):
+        p_comments = st.text_area("Official Authorization Notes / Directives")
+        next_stage_selected = st.selectbox("Advance Stage To", pipeline_stages, index=min(curr_idx + 1, len(pipeline_stages)-1))
         
-        if st.form_submit_button("Submit Digital Authorization"):
-            if curr_idx < len(stages) - 1 and approval_action == "Approve & Advance Stage":
-                next_stage = stages[curr_idx + 1]
-                execute_sql("UPDATE projects SET workflow_stage = ? WHERE project_code = ?", (next_stage, p_code_app))
-                execute_sql("INSERT INTO approval_history (project_code, stage, approver_name, approver_role, action, comments, timestamp) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                            (p_code_app, p_curr["workflow_stage"], st.session_state["full_name"], st.session_state["role"], "Approved", approver_comments, datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
-                log_audit_action(st.session_state["username"], "Approval", p_code_app, f"Advanced to {next_stage}")
-                st.success(f"Project successfully advanced to: {next_stage}")
-                st.rerun()
-            else:
-                st.warning("Action recorded or project is already fully approved.")
+        # Automatic Status Mapping
+        if "Completion" in next_stage_selected or "Citizen Portal" in next_stage_selected:
+            new_status = "🟢 Completed"
+        elif "Construction" in next_stage_selected or "Inspection" in next_stage_selected:
+            new_status = "🟠 In Progress"
+        elif "Draft" in next_stage_selected or "BOQ" in next_stage_selected or "Review" in next_stage_selected or "Approval" in next_stage_selected:
+            new_status = "🔵 Planning"
+        else:
+            new_status = p_curr["status"]
+
+        if st.form_submit_button("Submit Pipeline Update"):
+            execute_sql("UPDATE projects SET workflow_stage = ?, status = ? WHERE project_code = ?", (next_stage_selected, new_status, p_code_pipe))
+            execute_sql("INSERT INTO approval_history (project_code, stage, approver_name, approver_role, action, comments, timestamp) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                        (p_code_pipe, next_stage_selected, st.session_state["full_name"], st.session_state["role"], "Stage Advance", p_comments, datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
+            log_audit_action(st.session_state["username"], "Pipeline Advance", p_code_pipe, f"Moved to {next_stage_selected}")
+            st.success(f"Project updated to: {next_stage_selected}")
+            st.rerun()
 
 
 # ==========================================
-# MODULE 5: DOCUMENTS & VERSIONS
+# MODULE 5: DOCUMENTS & VERSIONING
 # ==========================================
-elif nav_choice == "📄 Documents & Versions":
-    st.subheader("📄 Document Repository & Version Control")
+elif nav_choice == "📄 Documents & Versioning":
+    st.subheader("📄 Document Repository & Versioning")
 
     all_docs = fetch_df("SELECT * FROM document_repository")
     st.dataframe(all_docs, use_container_width=True)
 
-    st.markdown("### 📤 Upload New Document / Revision")
+    st.markdown("### 📤 Upload New Version")
     with st.form("doc_upload_form"):
         u_pcode = st.selectbox("Select Project", df["project_code"].unique())
         u_file = st.file_uploader("Choose PDF or Spreadsheet")
-        u_version = st.text_input("Version Tag (e.g. v1.0, v2.0)", "v1.0")
-        if st.form_submit_button("Upload to Repository"):
+        u_version = st.text_input("Version Tag", "v1.0")
+        if st.form_submit_button("Attach to Project"):
             if u_file:
                 execute_sql("INSERT INTO document_repository (project_code, doc_name, version, doc_type, status, uploaded_by, upload_date) VALUES (?, ?, ?, ?, ?, ?, ?)",
                             (u_pcode, u_file.name, u_version, "PDF", "Pending Review", st.session_state["full_name"], datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
-                st.success("Document uploaded successfully!")
+                log_audit_action(st.session_state["username"], "Document Upload", u_pcode, f"Uploaded {u_file.name} ({u_version})")
+                st.success("Document attached to repository!")
                 st.rerun()
 
 
 # ==========================================
 # MODULE 6: DEEP ANALYTICS & FORECASTING
 # ==========================================
-elif nav_choice == "📈 Deep Analytics & Forecasting":
-    st.subheader("📈 Deep Analytics & Executive Forecasting")
+elif nav_choice == "📊 Deep Analytics & Forecasting":
+    st.subheader("📊 Executive Analytics & Forecast Engine")
 
     a1, a2 = st.columns(2)
     with a1:
-        st.markdown("#### Monthly Expenditure & Forecast Trend")
-        dates = pd.date_range(start="2026-01-01", periods=8, freq="M")
+        st.markdown("#### Monthly Spend vs. Budget Target")
+        dates = pd.date_range(start="2026-01-01", periods=8, freq="MS")
         spend_trend = pd.DataFrame({
             "Month": dates.strftime("%B %Y"),
             "Actual Expenditure": [12, 28, 45, 62, 89, 110, 145, 168.5],
             "Budget Forecast": [15, 30, 50, 70, 95, 120, 150, 180]
         })
-        fig_line = px.line(spend_trend, x="Month", y=["Actual Expenditure", "Budget Forecast"], markers=True)
+        fig_line = px.line(spend_trend, x="Month", y=["Actual Expenditure", "Budget Forecast"], markers=True, color_discrete_sequence=["#0A4D20", "#D4AF37"])
         st.plotly_chart(fig_line, use_container_width=True)
 
     with a2:
-        st.markdown("#### Contractor Performance Ranking")
+        st.markdown("#### Contractor Execution Ranking")
         c_rank = df.groupby("contractor")["percentage_complete"].mean().reset_index()
-        fig_c = px.bar(c_rank, x="percentage_complete", y="contractor", orientation="h", color="percentage_complete", color_continuous_scale="Viridis")
+        fig_c = px.bar(c_rank, x="percentage_complete", y="contractor", orientation="h", color="percentage_complete", color_continuous_scale="Greens")
         st.plotly_chart(fig_c, use_container_width=True)
 
 
@@ -577,43 +658,33 @@ elif nav_choice == "📈 Deep Analytics & Forecasting":
 # MODULE 7: INTERACTIVE NOTIFICATIONS
 # ==========================================
 elif nav_choice == "🔔 Interactive Notifications":
-    st.subheader("🔔 Actionable Notification Center")
+    st.subheader("🔔 Notification & Alert Center")
 
     notifs = fetch_df("SELECT * FROM notifications WHERE status = 'Unread'")
     if notifs.empty:
-        st.info("🎉 All clear! No unread notifications.")
+        st.info("🎉 All notifications cleared.")
     else:
         for idx, row in notifs.iterrows():
             st.markdown(f"""
-            <div class="notif-box {'notif-warning' if row['type']=='Warning' else 'notif-approval'}">
-                <div style="display:flex; justify-content:space-between;">
-                    <strong>{row['title']} (`{row['project_code']}`)</strong>
-                    <span style="font-size:12px; color:#6B7280;">{row['timestamp']}</span>
-                </div>
-                <div style="margin-top:6px; font-size:13px; color:#374151;">{row['message']}</div>
+            <div style="padding:12px; border-left:4px solid {'#EF4444' if row['type']=='Warning' else '#D4AF37'}; background:white; margin-bottom:10px; border-radius:6px;">
+                <strong>{row['title']} (`{row['project_code']}`)</strong><br/>
+                <span style="font-size:13px; color:#374151;">{row['message']}</span>
             </div>
             """, unsafe_allow_html=True)
             
-            b1, b2 = st.columns([1, 5])
-            with b1:
-                if st.button("Open Project", key=f"open_{row['notif_id']}"):
-                    st.session_state["selected_project_code"] = row['project_code']
-                    st.info(f"Navigating to Project Inspector for {row['project_code']}...")
-            with b2:
-                if st.button("Dismiss Alert", key=f"dism_{row['notif_id']}"):
-                    execute_sql("UPDATE notifications SET status = 'Dismissed' WHERE notif_id = ?", (row['notif_id'],))
-                    st.rerun()
+            if st.button("Dismiss Alert", key=f"dism_{row['notif_id']}"):
+                execute_sql("UPDATE notifications SET status = 'Dismissed' WHERE notif_id = ?", (row['notif_id'],))
+                st.rerun()
 
 
 # ==========================================
-# MODULE 8: ASK NYERI AI (DYNAMIC SQL ENGINE)
+# MODULE 8: ASK NYERI AI ASSISTANT
 # ==========================================
-elif nav_choice == "🤖 Ask Nyeri AI (Dynamic SQL)":
-    st.subheader("🤖 Ask Nyeri AI - Live Database Natural Language Assistant")
-    st.caption("Connected to SQLite DB. Try: 'Show delayed road projects', 'Which contractor has highest budget?', or 'Generate executive summary'.")
+elif nav_choice == "🤖 Ask Nyeri AI Assistant":
+    st.subheader("🤖 Ask Nyeri AI - Live Database Decision Assistant")
 
     if "ai_chat" not in st.session_state:
-        st.session_state.ai_chat = [{"role": "assistant", "content": "Hello! I am connected to the Nyeri Public Works database. What insights do you need?"}]
+        st.session_state.ai_chat = [{"role": "assistant", "content": "Hello! I am connected to the Nyeri Public Works database. What decision metrics do you need?"}]
 
     for msg in st.session_state.ai_chat:
         st.chat_message(msg["role"]).write(msg["content"])
@@ -625,33 +696,32 @@ elif nav_choice == "🤖 Ask Nyeri AI (Dynamic SQL)":
 
         q_lower = q.lower()
         if "delayed" in q_lower:
-            res_df = fetch_df("SELECT project_code, project_name, department, budget_allocated FROM projects WHERE status = 'Delayed'")
+            res_df = fetch_df("SELECT project_code, project_name, department, budget_allocated FROM projects WHERE status = '🔴 Delayed'")
             ans = f"Found **{len(res_df)} delayed project(s)** in the database:\n" + res_df.to_markdown(index=False)
         elif "highest budget" in q_lower or "contractor" in q_lower:
             res_df = fetch_df("SELECT contractor, SUM(budget_allocated) as total_budget FROM projects GROUP BY contractor ORDER BY total_budget DESC LIMIT 1")
             ans = f"The contractor with the highest total budget allocation is **{res_df.iloc[0]['contractor']}** with **{format_currency_short(res_df.iloc[0]['total_budget'])}**."
-        elif "executive summary" in q_lower:
+        elif "summary" in q_lower or "executive" in q_lower:
             tot_p = len(df)
             tot_b = df["budget_allocated"].sum()
             tot_s = df["actual_spend"].sum()
             ans = f"""
-            ### 🏛️ Executive Portfolio Summary
-            - **Total Projects:** {tot_p}
-            - **Total Capital Budget:** {format_currency_short(tot_b)}
-            - **Total Portfolio Spend:** {format_currency_short(tot_s)} (Utilization: {(tot_s/tot_b*100):.1f}%)
-            - **Health Status:** {len(df[df['status']=='Active'])} Active, {len(df[df['status']=='Completed'])} Completed, {len(df[df['status']=='Delayed'])} Delayed.
+            ### 🏛️ Executive Summary
+            - **Total Capital Projects:** {tot_p}
+            - **Allocated Portfolio Budget:** {format_currency_short(tot_b)}
+            - **Actual Expenditure:** {format_currency_short(tot_s)} ({(tot_s/tot_b*100):.1f}% utilization)
             """
         else:
-            ans = f"Query executed. Database currently holds {len(df)} active projects with total budget of {format_currency_short(df['budget_allocated'].sum())}."
+            ans = f"Query processed. Current database has {len(df)} projects with total allocation of {format_currency_short(df['budget_allocated'].sum())}."
 
         st.session_state.ai_chat.append({"role": "assistant", "content": ans})
         st.chat_message("assistant").write(ans)
 
 
 # ==========================================
-# MODULE 9: SYSTEM AUDIT TRAIL
+# MODULE 9: SETTINGS & SYSTEM AUDIT TRAIL
 # ==========================================
-elif nav_choice == "⚙️ System Audit Trail":
-    st.subheader("🔐 System Security & Audit Logs")
+elif nav_choice == "⚙️ Settings & System Audit Trail":
+    st.subheader("⚙️ Settings & System Audit Logs")
     logs = fetch_df("SELECT * FROM audit_logs ORDER BY log_id DESC LIMIT 30")
     st.dataframe(logs, use_container_width=True)
