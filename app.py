@@ -53,13 +53,11 @@ def init_enterprise_db():
             )
         ''')
 
-        # Upgrade existing database schema gracefully if contractor column is missing
         try:
             cursor.execute("ALTER TABLE projects ADD COLUMN contractor TEXT DEFAULT 'County In-House'")
         except sqlite3.OperationalError:
             pass
 
-        # Seed initial sample data if empty
         if cursor.execute("SELECT COUNT(*) FROM projects").fetchone()[0] == 0:
             sample_projects = [
                 ("PRJ-2026-001", "Karatina Market Modernization & Drainage", "Mathira East", "Infrastructure & Energy", "Apex Builders Ltd", 45000000.0, 38000000.0, 85, "In Progress", "Active", "admin", "2026-07-21 09:00:00"),
@@ -475,7 +473,7 @@ tab_dash, tab_entry, tab_docs, tab_audit = st.tabs([
 df = fetch_project_data()
 
 # ==========================================
-# TAB 1: EXECUTIVE DASHBOARD (EXPANDED)
+# TAB 1: EXECUTIVE DASHBOARD
 # ==========================================
 with tab_dash:
     if not df.empty:
@@ -509,11 +507,10 @@ with tab_dash:
                 filtered_df = filtered_df[filtered_df[contractor_col] == selected_contractor]
 
         # ----------------------------------------------------
-        # 1. EXPANDED KPI CARDS (6 METRICS)
+        # 1. KPI CARDS
         # ----------------------------------------------------
         st.subheader(f"📈 Executive Overview ({len(filtered_df)} Projects)")
 
-        # Metric Calculations
         total_projects = len(filtered_df)
         active_projects = len(filtered_df[filtered_df[status_col].astype(str).str.lower() == 'active']) if status_col else 0
         completed_projects = len(filtered_df[filtered_df[status_col].astype(str).str.lower().str.contains('complete', na=False)]) if status_col else 0
@@ -524,7 +521,6 @@ with tab_dash:
         total_spend = pd.to_numeric(filtered_df["actual_spend"], errors="coerce").sum()
         budget_utilization_pct = (total_spend / total_budget * 100) if total_budget > 0 else 0.0
 
-        # KPI Layout - 2 Rows of 3 Cards
         m_row1_col1, m_row1_col2, m_row1_col3 = st.columns(3)
         with m_row1_col1:
             st.metric("Total Projects", total_projects, help="Total projects in current filtered view")
@@ -566,7 +562,6 @@ with tab_dash:
                 st.error(f"❌ **{rejected_projects} Project Proposal(s) Rejected:**\n" + "\n".join([f"- {p}" for p in rejected_list]))
 
         with notif_col2:
-            # Check for high budget usage projects (>90% utilization)
             high_spend = filtered_df[(filtered_df["actual_spend"] / filtered_df["budget_allocated"] >= 0.90) & (filtered_df["percentage_complete"] < 100)]
             if not high_spend.empty:
                 high_spend_names = high_spend[name_col].tolist()
@@ -574,7 +569,6 @@ with tab_dash:
             else:
                 st.info("ℹ️ **Budget Check:** No budget overruns or elevated risk thresholds detected.")
 
-            # Pending Approvals
             pending_review = len(filtered_df[filtered_df["workflow_stage"].isin(["Draft", "Review"])])
             if pending_review > 0:
                 st.warning(f"📋 **{pending_review} Project(s) Pending Approval:** Currently in Draft or Review stage.")
@@ -610,12 +604,11 @@ with tab_dash:
                     title="Budget Allocation vs. Spend by Department",
                     xaxis_title="Department",
                     yaxis_title="Amount (KES Millions)",
-                    legend=dict(orient="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+                    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
                     margin=dict(t=40, b=20)
                 )
                 st.plotly_chart(fig_dept_perf, use_container_width=True)
 
-                # Department Progress Table / Spark summary
                 st.dataframe(
                     dept_perf.rename(columns={
                         dept_col: "Department",
@@ -724,9 +717,7 @@ with tab_dash:
             logs_df = fetch_audit_logs(limit=25)
 
             if not logs_df.empty:
-                # Filter for today's logs
                 today_logs = logs_df[logs_df["timestamp"].astype(str).str.startswith(today_str)]
-                
                 display_logs = today_logs if not today_logs.empty else logs_df.head(6)
 
                 if today_logs.empty:
